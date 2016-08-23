@@ -19,9 +19,16 @@ data TChain
 data TBranch
 data TTree
 
-foreign import ccall "ttreeC.h tchain" tchain :: CString -> IO (Ptr TChain)
-foreign import ccall "ttreeC.h tchainAdd" tchainAdd :: Ptr TChain -> CString -> IO ()
-foreign import ccall "ttreeC.h tchainGetEntry" tchainGetEntry :: Ptr TChain -> Int -> IO ()
+foreign import ccall "ttreeC.h floatAt" floatAt
+    :: Ptr CFloat -> CFloat
+foreign import ccall "ttreeC.h tchain" tchain
+    :: CString -> IO (Ptr TChain)
+foreign import ccall "ttreeC.h tchainAdd" tchainAdd
+    :: Ptr TChain -> CString -> IO ()
+foreign import ccall "ttreeC.h tchainGetEntry" tchainGetEntry
+    :: Ptr TChain -> Int -> IO ()
+foreign import ccall "ttreeC.h tchainSetBranchAddress" tchainSetBranchAddress
+    :: Ptr TChain -> CString -> Ptr a -> IO ()
 
 
 {-

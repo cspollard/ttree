@@ -5,7 +5,9 @@ extern "C" {
     void tchainAdd(void*, const char*);
     int tchainGetEntry(void*, int);
 
-    void ttreeSetBranchAddress(void*, const char*, void**);
+    void tchainSetBranchAddress(void*, const char*, void**);
+
+    float floatAt(void*);
 
     unsigned int vectorSizeI(void* vp);
     unsigned int vectorSizeC(void* vp);

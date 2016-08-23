@@ -1,7 +1,7 @@
 #include "ttreeC.h"
-#include "TTree.h"
 #include "TChain.h"
 #include <vector>
+#include <iostream>
 
 using namespace std;
 
@@ -24,12 +24,16 @@ int tchainGetEntry(void* vp, int i) {
     return cp->GetTree()->GetEntry(tn);
 }
 
-
-
-void ttreeSetBranchAddress(void* tp, const char* bn, void** p) {
-    TTree* t = (TTree*) tp;
+void tchainSetBranchAddress(void* tp, const char* bn, void** p) {
+    cout << p << endl;
+    TChain* t = (TChain*) tp;
     t->SetBranchAddress(bn, p);
     return;
+}
+
+
+float floatAt(void* fp) {
+    return * (float*) fp;
 }
 
 template <typename T>
