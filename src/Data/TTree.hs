@@ -29,8 +29,7 @@ double* vectorDataD(void* vp);
 float*  vectorDataF(void* vp);
 -}
 
-foreign import ccall "ttree.h ttreeSetBranchAddress" _ttreeSetBranchAddress
-    :: Ptr a -> CString -> Ptr (Ptr b) -> IO ()
+foreign import ccall "ttreeC.h ttreeSetBranchAddress" ttreeSetBranchAddress :: Ptr a -> CString -> Ptr (Ptr b) -> IO ()
 
 
 data TBranch a = TBScalar Text (Ptr a)
