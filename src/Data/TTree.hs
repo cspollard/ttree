@@ -109,3 +109,9 @@ getEntry tc@(TChain cp _) i = do n <- _tchainGetEntry cp i
                                  return $ if n < 0
                                              then Nothing
                                              else Just tc
+
+
+printBranch :: TBranch -> IO ()
+printBranch (TBFloat p)  = print =<< peek p
+printBranch (TBVFloat p) = do p' <- peek p
+                              print =<< peekArray (vectorSizeF p') (vectorDataF p')

@@ -10,13 +10,11 @@ main :: IO ()
 main = do c <- flip addFile "data/test.root" =<< tchain "nominal"
 
           c' <- foldlM addBranchF c ["mu", "weight_mc", "weight_pileup"]
-          mc <- getEntry c' 0
+          c'' <- foldlM addBranchVF c' ["jet_pt", "jet_eta", "jet_phi"]
+          mc <- getEntry c'' 0
 
           print mc
-          traverse_ (peek >=> print) $ toListOf (_Just . cBranches . traverse . _TBFloat) mc
-
-          -- p <- peek vptr
-          -- print =<< peekArray (vectorSizeF p) (vectorDataF p)
+          traverse_ printBranch $ toListOf (_Just . cBranches . traverse) mc
 
           -- TODO
           -- free mallocs
