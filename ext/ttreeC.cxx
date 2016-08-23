@@ -9,10 +9,9 @@ void* tchain(const char* tn) {
     return (void*) new TChain(tn);
 }
 
-void tchainAdd(void* vp, const char* fn) {
+int tchainAdd(void* vp, const char* fn) {
     TChain* cp = (TChain*) vp;
-    cp->Add(fn);
-    return;
+    return cp->Add(fn);
 }
 
 int tchainGetEntry(void* vp, int i) {

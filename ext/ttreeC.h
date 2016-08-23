@@ -2,7 +2,7 @@
 extern "C" {
 #endif
     void* tchain(const char*);
-    void tchainAdd(void*, const char*);
+    int tchainAdd(void*, const char*);
     int tchainGetEntry(void*, int);
 
     void tchainSetBranchAddress(void*, const char*, void**);

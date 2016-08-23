@@ -2,28 +2,21 @@ module Main where
 
 import Data.TTree
 import Foreign
-import Foreign.C
-
-type VPtr = Ptr ()
+import Control.Lens
+import Control.Monad ((>=>))
+import Data.Foldable (forM_, foldlM, traverse_)
 
 main :: IO ()
-main = do tname <- newCString "nominal"
-          fname <- newCString "data/test.root"
-          muname <- newCString "mu"
-          jptname <- newCString "jet_pt"
-          c <- tchain tname
-          tchainAdd c fname
+main = do c <- flip addFile "data/test.root" =<< tchain "nominal"
 
-          ptr <- calloc :: IO (Ptr CFloat)
-          vptr <- calloc :: IO (Ptr VPtr)
-          tchainSetBranchAddress c muname ptr
-          tchainSetBranchAddress c jptname vptr
-          tchainGetEntry c 0
-          print =<< peek ptr
-          print =<< peek vptr
+          c' <- foldlM addBranchF c ["mu", "weight_mc", "weight_pileup"]
+          mc <- getEntry c' 0
 
-          p <- peek vptr
-          print =<< peekArray (vectorSizeF p) (vectorDataF p)
+          print mc
+          traverse_ (peek >=> print) $ toListOf (_Just . cBranches . traverse . _TBFloat) mc
+
+          -- p <- peek vptr
+          -- print =<< peekArray (vectorSizeF p) (vectorDataF p)
 
           -- TODO
           -- free mallocs
