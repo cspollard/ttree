@@ -21,7 +21,7 @@ data TTree
 
 foreign import ccall "ttreeC.h tchain" tchain :: CString -> IO (Ptr TChain)
 foreign import ccall "ttreeC.h tchainAdd" tchainAdd :: Ptr TChain -> CString -> IO ()
-foreign import ccall "ttreeC.h ttreeGetEntry" ttreeGetEntry :: Ptr TTree -> Int -> IO ()
+foreign import ccall "ttreeC.h tchainGetEntry" tchainGetEntry :: Ptr TChain -> Int -> IO ()
 
 
 {-

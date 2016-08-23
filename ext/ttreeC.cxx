@@ -15,9 +15,13 @@ void tchainAdd(void* vp, const char* fn) {
     return;
 }
 
-int ttreeGetEntry(void* vp, int i) {
+int tchainGetEntry(void* vp, int i) {
     TChain* cp = (TChain*) vp;
-    return cp->GetEntry(i);
+    int tn = cp->LoadTree(i);
+    if (tn < 0)
+        return 0;
+    
+    return cp->GetTree()->GetEntry(tn);
 }
 
 
