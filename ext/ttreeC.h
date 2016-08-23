@@ -7,8 +7,6 @@ extern "C" {
 
     void tchainSetBranchAddress(void*, const char*, void**);
 
-    float floatAt(void*);
-
     unsigned int vectorSizeI(void* vp);
     unsigned int vectorSizeC(void* vp);
     unsigned int vectorSizeD(void* vp);

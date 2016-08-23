@@ -32,10 +32,6 @@ void tchainSetBranchAddress(void* tp, const char* bn, void** p) {
 }
 
 
-float floatAt(void* fp) {
-    return * (float*) fp;
-}
-
 template <typename T>
 vector<T>* castVec(void* vp) {
     return (vector<T>*) vp;
