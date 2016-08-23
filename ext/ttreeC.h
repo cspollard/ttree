@@ -1,6 +1,10 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+    void* tchain(const char*);
+    void tchainAdd(void*, const char*);
+    int ttreeGetEntry(void*, int);
+
     void ttreeSetBranchAddress(void*, const char*, void**);
 
     unsigned int vectorSizeI(void* vp);

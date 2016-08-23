@@ -15,23 +15,16 @@ import Data.Vector (Vector)
 import Data.Text (Text)
 
 
+data TChain
+data TBranch
+data TTree
+
+foreign import ccall "ttreeC.h tchain" tchain :: CString -> IO (Ptr TChain)
+foreign import ccall "ttreeC.h tchainAdd" tchainAdd :: Ptr TChain -> CString -> IO ()
+foreign import ccall "ttreeC.h ttreeGetEntry" ttreeGetEntry :: Ptr TTree -> Int -> IO ()
+
+
 {-
-void ttreeSetBranchAddress(void*, const char*, void**);
-
-unsigned int vectorSizeI(void* vp);
-unsigned int vectorSizeC(void* vp);
-unsigned int vectorSizeD(void* vp);
-unsigned int vectorSizeF(void* vp);
-
-int*    vectorDataI(void* vp);
-char*   vectorDataC(void* vp);
-double* vectorDataD(void* vp);
-float*  vectorDataF(void* vp);
--}
-
-foreign import ccall "ttreeC.h ttreeSetBranchAddress" ttreeSetBranchAddress :: Ptr a -> CString -> Ptr (Ptr b) -> IO ()
-
-
 data TBranch a = TBScalar Text (Ptr a)
                | TBVector Text (Ptr a)
 
@@ -41,3 +34,4 @@ makePrisms ''TBranch
 newtype TTree a = TTree { _unTTree :: [TBranch a] }
 
 makeLenses ''TTree
+-}

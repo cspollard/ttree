@@ -1,8 +1,26 @@
 #include "ttreeC.h"
 #include "TTree.h"
+#include "TChain.h"
 #include <vector>
 
 using namespace std;
+
+void* tchain(const char* tn) {
+    return (void*) new TChain(tn);
+}
+
+void tchainAdd(void* vp, const char* fn) {
+    TChain* cp = (TChain*) vp;
+    cp->Add(fn);
+    return;
+}
+
+int ttreeGetEntry(void* vp, int i) {
+    TChain* cp = (TChain*) vp;
+    return cp->GetEntry(i);
+}
+
+
 
 void ttreeSetBranchAddress(void* tp, const char* bn, void** p) {
     TTree* t = (TTree*) tp;
