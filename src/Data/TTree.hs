@@ -1,24 +1,44 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ForeignFunctionInterface #-}
 
 module Data.TTree where
 
 
+import Foreign.C.Types
+import Foreign.Ptr
+import Foreign.C.String
+
 import Control.Lens
+import Conduit
 import Data.HashMap.Strict (HashMap)
 import Data.Vector (Vector)
 import Data.Text (Text)
 
 
-data Branch = BDouble Double
-            | BInt Int
-            | BChar Char
-            | BVDouble (Vector Double)
-            | BVInt (Vector Int)
-            | BVChar (Vector Char)
+{-
+void ttreeSetBranchAddress(void*, const char*, void**);
 
-makePrisms ''Branch
+unsigned int vectorSizeI(void* vp);
+unsigned int vectorSizeC(void* vp);
+unsigned int vectorSizeD(void* vp);
+unsigned int vectorSizeF(void* vp);
+
+int*    vectorDataI(void* vp);
+char*   vectorDataC(void* vp);
+double* vectorDataD(void* vp);
+float*  vectorDataF(void* vp);
+-}
+
+foreign import ccall "ttree.h ttreeSetBranchAddress" _ttreeSetBranchAddress
+    :: Ptr a -> CString -> Ptr (Ptr b) -> IO ()
 
 
-newtype TTree = TTree { _unTTree :: HashMap Text Branch }
+data TBranch a = TBScalar Text (Ptr a)
+               | TBVector Text (Ptr a)
+
+makePrisms ''TBranch
+
+
+newtype TTree a = TTree { _unTTree :: [TBranch a] }
 
 makeLenses ''TTree
