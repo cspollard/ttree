@@ -146,34 +146,28 @@ addFile tc@(TChain cp _) fn = do s <- newCString fn
                                  return tc
 
 
-addBranchS :: Storable a => (ForeignPtr a -> TBranch) -> TChain -> String -> IO TChain
-addBranchS f (TChain cp cbs) n = do p <- mallocForeignPtr
-                                    s <- newCString n
-                                    withForeignPtr p $ _tchainSetBranchAddress cp s
-                                    free s
-                                    return $ TChain cp (cbs & at n ?~ f p)
+addBranch :: Storable a
+          => (ForeignPtr a -> TBranch) -> String -> TChain -> IO TChain
+addBranch f n (TChain cp cbs) = do p <- mallocForeignPtr
+                                   s <- newCString n
+                                   withForeignPtr p $ _tchainSetBranchAddress cp s
+                                   free s
+                                   return $ TChain cp (cbs & at n ?~ f p)
 
-
-addBranchV :: Vectorizable a => (ForeignPtr (VecPtr a) -> TBranch) -> TChain -> String -> IO TChain
-addBranchV f (TChain cp cbs) n = do p <- mallocForeignPtr
-                                    s <- newCString n
-                                    withForeignPtr p $ _tchainSetBranchAddress cp s
-                                    free s
-                                    return $ TChain cp (cbs & at n ?~ f p)
 
 addBranchC, addBranchVC, addBranchI, addBranchVI
-    :: TChain -> String -> IO TChain
-addBranchC = addBranchS TBChar
-addBranchVC = addBranchV TBVChar
-addBranchI = addBranchS TBInt
-addBranchVI = addBranchV TBVInt
+    :: String -> TChain -> IO TChain
+addBranchC = addBranch TBChar
+addBranchVC = addBranch TBVChar
+addBranchI = addBranch TBInt
+addBranchVI = addBranch TBVInt
 
 addBranchF, addBranchVF, addBranchD, addBranchVD
-    :: TChain -> String -> IO TChain
-addBranchF = addBranchS TBFloat
-addBranchVF = addBranchV TBVFloat
-addBranchD = addBranchS TBDouble
-addBranchVD = addBranchV TBVDouble
+    :: String -> TChain -> IO TChain
+addBranchF = addBranch TBFloat
+addBranchVF = addBranch TBVFloat
+addBranchD = addBranch TBDouble
+addBranchVD = addBranch TBVDouble
 
 
 getEntry :: TChain -> Int -> IO (Maybe TChain)
