@@ -1,7 +1,6 @@
 #include "ttreeC.h"
 #include "TChain.h"
 #include <vector>
-#include <iostream>
 
 using namespace std;
 
@@ -24,7 +23,6 @@ int tchainGetEntry(void* vp, int i) {
 }
 
 void tchainSetBranchAddress(void* tp, const char* bn, void** p) {
-    cout << p << endl;
     TChain* t = (TChain*) tp;
     t->SetBranchAddress(bn, p);
     return;
