@@ -15,11 +15,7 @@ int tchainAdd(void* vp, const char* fn) {
 
 int tchainGetEntry(void* vp, int i) {
     TChain* cp = (TChain*) vp;
-    int tn = cp->LoadTree(i);
-    if (tn < 0)
-        return 0;
-    
-    return cp->GetTree()->GetEntry(tn);
+    return cp->GetEntry(i);
 }
 
 void tchainSetBranchAddress(void* tp, const char* bn, void** p) {

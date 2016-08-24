@@ -9,6 +9,7 @@ module Data.TTree where
 
 
 import Foreign
+import Foreign.C.Types
 import Foreign.C.String
 
 import Control.Lens
@@ -77,9 +78,33 @@ peekV :: Vectorizable a => VecPtr a -> IO [a]
 peekV v = peekArray (vSize v) (vData v)
 
 
+-- TODO
+-- vector<vector<int> > and similar won't work.
+
+               -- scalar branches
+data TTreeValue = TVChar Char
+                | TVInt Int
+                | TVUInt CUInt
+                | TVLong CLong
+                | TVFloat Float
+                | TVDouble Double
+               -- vector branches
+                | TVVChar [Char]
+                | TVVInt [Int]
+                | TVVFloat [Float]
+                | TVVDouble [Double]
+                deriving Show
+
+makePrisms ''TTreeValue
+
+type TTree = HashMap String TTreeValue
+
+
             -- scalar branches
 data TBranch = TBChar (ForeignPtr Char)
              | TBInt (ForeignPtr Int)
+             | TBUInt (ForeignPtr CUInt)
+             | TBLong (ForeignPtr CLong)
              | TBFloat (ForeignPtr Float)
              | TBDouble (ForeignPtr Double)
             -- vector branches
@@ -93,37 +118,17 @@ makePrisms ''TBranch
 
 
 
-readS :: Storable a => Prism' TBranch (ForeignPtr a) -> TBranch -> IO (Maybe a)
-readS p b = traverse (`withForeignPtr` peek) $ b ^? p
-
-readV :: Vectorizable a => Prism' TBranch (ForeignPtr (VecPtr a)) -> TBranch -> IO (Maybe [a])
-readV p b = traverse (`withForeignPtr` (peek >=> peekV)) $ b ^? p
-
-
-
-readC :: TBranch -> IO (Maybe Char)
-readC = readS _TBChar
-
-readVC :: TBranch -> IO (Maybe String)
-readVC = readV _TBVChar
-
-readI :: TBranch -> IO (Maybe Int)
-readI = readS _TBInt
-
-readVI :: TBranch -> IO (Maybe [Int])
-readVI = readV _TBVInt
-
-readF :: TBranch -> IO (Maybe Float)
-readF = readS _TBFloat
-
-readVF :: TBranch -> IO (Maybe [Float])
-readVF = readV _TBVFloat
-
-readD :: TBranch -> IO (Maybe Double)
-readD = readS _TBDouble
-
-readVD :: TBranch -> IO (Maybe [Double])
-readVD = readV _TBVDouble
+readBranch :: TBranch -> IO TTreeValue
+readBranch (TBChar fp) = TVChar <$> withForeignPtr fp peek
+readBranch (TBInt fp) = TVInt <$> withForeignPtr fp peek
+readBranch (TBUInt fp) = TVUInt <$> withForeignPtr fp peek
+readBranch (TBLong fp) = TVLong <$> withForeignPtr fp peek
+readBranch (TBFloat fp) = TVFloat <$> withForeignPtr fp peek
+readBranch (TBDouble fp) = TVDouble <$> withForeignPtr fp peek
+readBranch (TBVChar fp) = TVVChar <$> withForeignPtr fp (peek >=> peekV)
+readBranch (TBVInt fp) = TVVInt <$> withForeignPtr fp (peek >=> peekV)
+readBranch (TBVFloat fp) = TVVFloat <$> withForeignPtr fp (peek >=> peekV)
+readBranch (TBVDouble fp) = TVVDouble <$> withForeignPtr fp (peek >=> peekV)
 
 
 data TChain = TChain { _cPtr :: VPtr
@@ -131,6 +136,19 @@ data TChain = TChain { _cPtr :: VPtr
                      } deriving Show
 
 makeLenses ''TChain
+
+runChain :: MonadIO m => TChain -> Producer m TTree
+runChain c = loop c 0
+    where loop c' i = do mc <- liftIO (getEntry i c')
+                         case mc of
+                              Nothing -> return ()
+                              Just c''@(TChain _ cbs) -> do traverse (liftIO . readBranch) cbs >>= yield
+                                                            loop c'' (i+1)
+
+
+runChainN :: MonadIO m => Int -> TChain -> Producer m TTree
+runChainN n c = runChain c =$= takeC n
+
 
 tchain :: String -> IO TChain
 tchain n = do s <- newCString n
@@ -141,7 +159,7 @@ tchain n = do s <- newCString n
 
 addFile :: TChain -> String -> IO TChain
 addFile tc@(TChain cp _) fn = do s <- newCString fn
-                                 _tchainAdd cp s
+                                 _ <- _tchainAdd cp s
                                  free s
                                  return tc
 
@@ -150,16 +168,18 @@ addBranch :: Storable a
           => (ForeignPtr a -> TBranch) -> String -> TChain -> IO TChain
 addBranch f n (TChain cp cbs) = do p <- mallocForeignPtr
                                    s <- newCString n
-                                   withForeignPtr p $ _tchainSetBranchAddress cp s
+                                   _ <- withForeignPtr p $ _tchainSetBranchAddress cp s
                                    free s
                                    return $ TChain cp (cbs & at n ?~ f p)
 
 
-addBranchC, addBranchVC, addBranchI, addBranchVI
+addBranchC, addBranchVC, addBranchI, addBranchU, addBranchL, addBranchVI
     :: String -> TChain -> IO TChain
 addBranchC = addBranch TBChar
 addBranchVC = addBranch TBVChar
 addBranchI = addBranch TBInt
+addBranchU = addBranch TBUInt
+addBranchL = addBranch TBLong
 addBranchVI = addBranch TBVInt
 
 addBranchF, addBranchVF, addBranchD, addBranchVD
@@ -170,14 +190,12 @@ addBranchD = addBranch TBDouble
 addBranchVD = addBranch TBVDouble
 
 
-getEntry :: TChain -> Int -> IO (Maybe TChain)
-getEntry tc@(TChain cp _) i = do n <- _tchainGetEntry cp i
+getEntry :: Int -> TChain -> IO (Maybe TChain)
+getEntry i tc@(TChain cp _) = do n <- _tchainGetEntry cp i
                                  return $ if n < 0
                                              then Nothing
                                              else Just tc
 
 
-printBranch :: TBranch -> IO ()
-printBranch (TBFloat p)  = print =<< withForeignPtr p peek
-printBranch (TBVFloat p) = do p' <- withForeignPtr p peek
-                              print =<< peekArray (vectorSizeF p') (vectorDataF p')
+projectChain :: MonadIO m => TChain -> (a -> TTree -> a) -> a -> m a
+projectChain c f x = runChain c $$ foldlC f x
