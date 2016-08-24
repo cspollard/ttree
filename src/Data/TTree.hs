@@ -1,4 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -14,7 +15,11 @@ import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
 
 
+-- void pointer
 type VPtr = Ptr ()
+
+-- pointer to a c++ vector
+type VecPtr a = VPtr
 
 foreign import ccall "ttreeC.h tchain" _tchain
     :: CString -> IO VPtr
@@ -26,23 +31,27 @@ foreign import ccall "ttreeC.h tchainSetBranchAddress" _tchainSetBranchAddress
     :: VPtr -> CString -> Ptr a -> IO ()
 
 foreign import ccall "ttreeC.h vectorSizeC" vectorSizeC
-    :: Ptr () -> Int
+    :: VecPtr Char -> Int
 foreign import ccall "ttreeC.h vectorDataC" vectorDataC
-    :: Ptr () -> Ptr Char
+    :: VecPtr Char -> Ptr Char
 foreign import ccall "ttreeC.h vectorSizeI" vectorSizeI
-    :: Ptr () -> Int
+    :: VecPtr Int -> Int
 foreign import ccall "ttreeC.h vectorDataI" vectorDataI
-    :: Ptr () -> Ptr Int
+    :: VecPtr Int -> Ptr Int
 foreign import ccall "ttreeC.h vectorSizeF" vectorSizeF
-    :: Ptr () -> Int
+    :: VecPtr Float -> Int
 foreign import ccall "ttreeC.h vectorDataF" vectorDataF
-    :: Ptr () -> Ptr Float
+    :: VecPtr Float -> Ptr Float
 foreign import ccall "ttreeC.h vectorSizeD" vectorSizeD
-    :: Ptr () -> Int
+    :: VecPtr Double -> Int
 foreign import ccall "ttreeC.h vectorDataD" vectorDataD
-    :: Ptr () -> Ptr Double
+    :: VecPtr Double -> Ptr Double
 
 
+
+class Branchable b where
+    type BranchPtr b
+    mkPtr :: b
 
             -- scalar branches
 data TBranch = TBChar (Ptr Char)
@@ -50,13 +59,14 @@ data TBranch = TBChar (Ptr Char)
              | TBFloat (Ptr Float)
              | TBDouble (Ptr Double)
             -- vector branches
-             | TBVChar (Ptr VPtr)
-             | TBVInt (Ptr VPtr)
-             | TBVFloat (Ptr VPtr)
-             | TBVDouble (Ptr VPtr)
+             | TBVChar (Ptr (VecPtr Char))
+             | TBVInt (Ptr (VecPtr Int))
+             | TBVFloat (Ptr (VecPtr Float))
+             | TBVDouble (Ptr (VecPtr Double))
              deriving Show
 
 makePrisms ''TBranch
+
 
 readF :: TBranch -> IO (Maybe Float)
 readF b = traverse peek $ b ^? _TBFloat
