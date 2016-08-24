@@ -14,8 +14,8 @@ import Foreign.C.String
 
 import Control.Lens
 import Conduit
-import Data.HashMap.Lazy (HashMap)
-import qualified Data.HashMap.Lazy as HM
+import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HM
 
 import Control.Monad ((>=>))
 
@@ -137,18 +137,6 @@ data TChain = TChain { _cPtr :: VPtr
 
 makeLenses ''TChain
 
-runChain :: MonadIO m => TChain -> Producer m TTree
-runChain c = loop c 0
-    where loop c' i = do mc <- liftIO (getEntry i c')
-                         case mc of
-                              Nothing -> return ()
-                              Just c''@(TChain _ cbs) -> do traverse (liftIO . readBranch) cbs >>= yield
-                                                            loop c'' (i+1)
-
-
-runChainN :: MonadIO m => Int -> TChain -> Producer m TTree
-runChainN n c = runChain c =$= takeC n
-
 
 tchain :: String -> IO TChain
 tchain n = do s <- newCString n
@@ -157,11 +145,10 @@ tchain n = do s <- newCString n
               return $ TChain c HM.empty
 
 
-addFile :: TChain -> String -> IO TChain
-addFile tc@(TChain cp _) fn = do s <- newCString fn
-                                 _ <- _tchainAdd cp s
-                                 free s
-                                 return tc
+addFile :: TChain -> String -> IO ()
+addFile (TChain cp _) fn = do s <- newCString fn
+                              _ <- _tchainAdd cp s
+                              free s
 
 
 addBranch :: Storable a
@@ -190,11 +177,23 @@ addBranchD = addBranch TBDouble
 addBranchVD = addBranch TBVDouble
 
 
-getEntry :: Int -> TChain -> IO (Maybe TChain)
-getEntry i tc@(TChain cp _) = do n <- _tchainGetEntry cp i
-                                 return $ if n < 0
-                                             then Nothing
-                                             else Just tc
+getEntry :: Int -> TChain -> IO (Maybe TTree)
+getEntry i (TChain cp cbs) = do n <- _tchainGetEntry cp i
+                                if n <= 0
+                                   then return Nothing
+                                   else Just <$> traverse (liftIO . readBranch) cbs
+
+
+runChain :: MonadIO m => TChain -> Producer m TTree
+runChain c = loop 0 c
+    where loop i c' = do mc <- liftIO (getEntry i c')
+                         case mc of
+                              Nothing -> return ()
+                              Just tt -> yield tt >> loop (i+1) c'
+
+
+runChainN :: MonadIO m => Int -> TChain -> Producer m TTree
+runChainN n c = runChain c =$= takeC n
 
 
 projectChain :: MonadIO m => TChain -> (a -> TTree -> a) -> a -> m a

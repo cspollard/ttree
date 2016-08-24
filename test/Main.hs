@@ -6,8 +6,8 @@ import Data.Foldable (foldrM)
 import Conduit
 
 main :: IO ()
-main = do c <- flip addFile "data/test.root" =<< tchain "nominal"
-
+main = do c <- tchain "nominal"
+          addFile c "data/test.root"
           c' <- flip (foldrM addBranchF) ["mu", "weight_mc", "weight_pileup"] 
                 =<< flip (foldrM addBranchVF) ["jet_pt", "jet_eta", "jet_phi"]
                 =<< flip (foldrM addBranchD) ["weight_EW"]
@@ -15,4 +15,4 @@ main = do c <- flip addFile "data/test.root" =<< tchain "nominal"
                 =<< flip (foldrM addBranchL) ["eventNumber"]
                 =<< foldrM addBranchU c ["runNumber"]
 
-          runChain c' $$ takeC 10 =$= mapM_C print
+          runChain c' $$ takeC 99999 =$= mapM_C print
