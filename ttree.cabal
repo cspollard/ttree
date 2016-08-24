@@ -21,11 +21,9 @@ library
   -- other-extensions:    
   include-dirs:        ext/
   c-sources:           ext/ttreeC.cxx
-  include-dirs:        /Users/cspollard/Programming/root/include
   cc-options:          -std=c++11 -m64
   extra-libraries:     stdc++ Tree m dl Core Core RIO Net Hist Graf Graf3d Gpad Tree Rint Postscript Matrix Physics MathCore
   ghc-options:         -pgmlg++ -Wall
-  extra-lib-dirs:      /Users/cspollard/Programming/root/lib
   build-depends:       base >=4.8 && <4.9
                      , lens >=4.9 && <5.0
                      , unordered-containers >=0.2 && <0.3
