@@ -1,0 +1,2 @@
+include-dirs: @X_INC_DIRS@
+extra-lib-dirs: @X_LIB_DIRS@
