@@ -161,8 +161,19 @@ addBranchV f (TChain cp cbs) n = do p <- mallocForeignPtr
                                     free s
                                     return $ TChain cp (cbs & at n ?~ f p)
 
+addBranchC, addBranchVC, addBranchI, addBranchVI
+    :: TChain -> String -> IO TChain
+addBranchC = addBranchS TBChar
+addBranchVC = addBranchV TBVChar
+addBranchI = addBranchS TBInt
+addBranchVI = addBranchV TBVInt
+
+addBranchF, addBranchVF, addBranchD, addBranchVD
+    :: TChain -> String -> IO TChain
 addBranchF = addBranchS TBFloat
 addBranchVF = addBranchV TBVFloat
+addBranchD = addBranchS TBDouble
+addBranchVD = addBranchV TBVDouble
 
 
 getEntry :: TChain -> Int -> IO (Maybe TChain)
