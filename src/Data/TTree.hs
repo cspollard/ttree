@@ -8,27 +8,19 @@
 
 module Data.TTree where
 
-import Control.Lens
 import Conduit
 
 import Foreign hiding (void)
 import Foreign.C.Types
 import Foreign.C.String
 
-import Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as HM
-
-import Control.Monad ((>=>), (<=<), when, void)
+import Control.Monad ((>=>), (<=<), void)
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Maybe
-import Data.Foldable (foldrM)
 
 
 -- void pointer
 type VPtr = Ptr ()
-
--- pointer to a c++ vector
-newtype VecPtr a = VecPtr { _vptr :: VPtr } deriving (Show, Storable)
 
 foreign import ccall "ttreeC.h tchain" _tchain
     :: CString -> IO VPtr
@@ -57,45 +49,6 @@ foreign import ccall "ttreeC.h vectorSizeD" vectorSizeD
     :: VecPtr Double -> Int
 foreign import ccall "ttreeC.h vectorDataD" vectorDataD
     :: VecPtr Double -> Ptr Double
-
-
--- I think there is probably a better way to do all of this, but since
--- I need to know the type of each branch at *run time*, the many
--- constructors to TBranch seem necessary.
-
--- TTreeValue, which seems like a "double" of TBranch could hopefully
--- be done away with some how, but for now I need it to be the pure
--- equivalent of TBranch--and what people use in practice.
-
-
-{-
-newtype STLVec a = STLVec { vecPtr :: ForeignPtr (Ptr ()) }
-                          deriving (Eq, Show)
-
-class Storable a => Vecable a where
-    sizeV :: STLVec a -> Int
-    dataV :: STLVec a -> Ptr a
-
-instance Vecable Char where
-    sizeV = withForeignPtr . vecPtr . vectorSizeC
-    dataV = withForeignPtr . vecPtr . vectorDataC
-
-instance Vecable Int where
-    sizeV = withForeignPtr . vecPtr . vectorSizeI
-    dataV = withForeignPtr . vecPtr . vectorDataI
-
-instance Vecable Float where
-    sizeV = withForeignPtr . vecPtr . vectorSizeF
-    dataV = withForeignPtr . vecPtr . vectorDataF
-
-instance Vecable Double where
-    sizeV = withForeignPtr . vecPtr . vectorSizeD
-    dataV = withForeignPtr . vecPtr . vectorDataD
-
-
-peekV :: Vecable a => VecPtr a -> IO [a]
-peekV v = peekArray (sizeV v) (dataV v)
--}
 
 
 
@@ -127,7 +80,8 @@ readBranch :: (MonadIO m, Branchable a, Storable (PtrType a)) => String -> Chain
 readBranch s = do (cp, i) <- ask
                   liftIO . alloca $ go s cp i
 
-    where go s' cp' i' bp' = do n <- withCString s' $ \n -> withForeignPtr cp' $ \p -> _tchainGetBranchEntry p n i' bp'
+    where go s' cp' i' bp' = do print bp'
+                                n <- withCString s' $ \n -> withForeignPtr cp' $ \p -> _tchainGetBranchEntry p n i' bp'
                                 if n > 0 then fromBranch bp' else fail $ "failed to read branch" ++ s
 
 
@@ -145,16 +99,54 @@ instance Branchable CLong where
     fromBranch = peek
 
 
+-- pointer to a c++ vector
+newtype VecPtr a = VecPtr { _vptr :: VPtr } deriving (Show, Storable)
+
+peekV :: Vecable a => VecPtr a -> IO [a]
+peekV v = peekArray (sizeV v) (dataV v)
+
+
+class Storable a => Vecable a where
+    sizeV :: VecPtr a -> Int
+    dataV :: VecPtr a -> Ptr a
+
+
+instance Vecable Char where
+    sizeV = vectorSizeC
+    dataV = vectorDataC
+
+instance Vecable Int where
+    sizeV = vectorSizeI
+    dataV = vectorDataI
+
+instance Vecable Float where
+    sizeV = vectorSizeF
+    dataV = vectorDataF
+
+instance Vecable Double where
+    sizeV = vectorSizeD
+    dataV = vectorDataD
+
+
+instance Vecable a => Branchable [a] where
+    type PtrType [a] = VecPtr a
+    fromBranch p = print p >> (peek >=> peekV) p
+
+
 class FromChain fc where
     fromChain :: MonadIO m => ChainRead m fc
 
-data Event = Event Float CLong deriving Show
+data Event = Event Float CLong [Float] [Float] [Float] deriving Show
 
 instance FromChain Event where
-    fromChain = Event <$> readBranch "mu" <*> readBranch "eventNumber"
+    fromChain = Event <$> readBranch "mu"
+                      <*> readBranch "eventNumber"
+                      <*> readBranch "jet_pt"
+                      <*> readBranch "jet_eta"
+                      <*> readBranch "jet_phi"
 
 
-runChain :: MonadIO m => ChainRead (ConduitM i o m) o -> TChain -> ConduitM i o m ()
+runChain :: Monad m => ChainRead (ConduitM i o m) o -> TChain -> ConduitM i o m ()
 runChain f c = loop c 0 
     where loop c' i = do ms <- runMaybeT $ runReaderT f (c', i)
                          case ms of
@@ -162,17 +154,5 @@ runChain f c = loop c 0
                               Nothing -> return ()
 
 
-{-
-
-runChainN :: MonadIO m => Int -> TChain -> Producer m TTree
-runChainN n c = runChain c =$= takeC n
-
-
--- this class should be the main way in which people interact with
--- TTrees.
-class FromTTree ft where
-    fromBranches :: Hashmap String TBranch -> Maybe ft
-    neededBranches :: HashMap String (Storable a => ForeignPtr a -> TBranch )
-
-
--}
+runChainN :: Monad m => Int -> ChainRead (ConduitM i o m) o -> TChain -> ConduitM i o m ()
+runChainN n f c = runChain f c =$= takeC n

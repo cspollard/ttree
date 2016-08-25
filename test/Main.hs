@@ -1,7 +1,6 @@
 module Main where
 
 import Data.TTree
-import Data.Foldable (foldrM)
 import Conduit
 import System.Environment (getArgs)
 
