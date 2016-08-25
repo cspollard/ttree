@@ -18,8 +18,9 @@ import Foreign.C.String
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
 
-import Control.Monad ((>=>), (<=<), when)
-import Control.Monad.State
+import Control.Monad ((>=>), (<=<), when, void)
+import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Maybe
 import Data.Foldable (foldrM)
 
 
@@ -35,8 +36,8 @@ foreign import ccall "ttreeC.h tchainAdd" _tchainAdd
     :: VPtr -> CString -> IO Int
 foreign import ccall "ttreeC.h tchainGetEntry" _tchainGetEntry
     :: VPtr -> Int -> IO Int
-foreign import ccall "ttreeC.h tchainSetBranchAddress" _tchainSetBranchAddress
-    :: VPtr -> CString -> Ptr a -> IO ()
+foreign import ccall "ttreeC.h tchainGetBranchEntry" _tchainGetBranchEntry
+    :: VPtr -> CString -> Int -> Ptr a -> IO Int
 foreign import ccall "ttreeC.h &tchainFree" _tchainFree
     :: FunPtr (Ptr a -> IO ())
 
@@ -114,23 +115,20 @@ addFile :: TChain -> String -> IO ()
 addFile cp fn = withCString fn $ \s -> void (withForeignPtr cp (`_tchainAdd` s))
 
 
-type ChainRead m a = StateT (TChain, Int, HashMap String VPtr) m a
+type ChainRead m a = ReaderT (TChain, Int) (MaybeT m) a
 
-getEntry :: MonadIO m => a -> ChainRead m (Maybe a)
-getEntry x = do (cp, i, _) <- get
-                n <- liftIO $ withForeignPtr cp $ flip _tchainGetEntry i
-                return $ if n > 0 then Just x else Nothing
+-- getEntry :: MonadIO m => a -> ChainRead m (Maybe a)
+-- getEntry x = do (cp, i, _) <- get
+                -- n <- liftIO $ withForeignPtr cp $ flip _tchainGetEntry i
+                -- return $ if n > 0 then Just x else Nothing
 
 
-readBranch :: (MonadIO m, Branchable a, Storable (PtrType a)) => String -> StateT (TChain, Int, HashMap String VPtr) m a
-readBranch s = do (cp, i, hm) <- get
+readBranch :: (MonadIO m, Branchable a, Storable (PtrType a)) => String -> ChainRead m a
+readBranch s = do (cp, i) <- ask
+                  liftIO . alloca $ go s cp i
 
-                  case hm ^? ix s of
-                       Just p  -> liftIO . fromBranch . castPtr $ p
-                       Nothing -> do bp <- liftIO calloc
-                                     put (cp, i, at s ?~ castPtr bp $ hm)
-                                     liftIO $ withCString s $ \n -> withForeignPtr cp $ \p -> _tchainSetBranchAddress p n bp
-                                     liftIO $ fromBranch bp
+    where go s' cp' i' bp' = do n <- withCString s' $ \n -> withForeignPtr cp' $ \p -> _tchainGetBranchEntry p n i' bp'
+                                if n > 0 then fromBranch bp' else fail $ "failed to read branch" ++ s
 
 
 
@@ -157,11 +155,11 @@ instance FromChain Event where
 
 
 runChain :: MonadIO m => ChainRead (ConduitM i o m) o -> TChain -> ConduitM i o m ()
-runChain f c = loop c 0 mempty
-    where loop c' i hm = do (ms, (_, _, hm')) <- runStateT (f >>= getEntry) (c', i, hm)
-                            case ms of
-                                 Just x  -> yield x >> loop c' (i+1) hm'
-                                 Nothing -> return ()
+runChain f c = loop c 0 
+    where loop c' i = do ms <- runMaybeT $ runReaderT f (c', i)
+                         case ms of
+                              Just x  -> yield x >> loop c' (i+1)
+                              Nothing -> return ()
 
 
 {-

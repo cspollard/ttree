@@ -6,7 +6,7 @@ extern "C" {
     int tchainGetEntry(void*, int);
 
     void tchainFree(void*);
-    void tchainSetBranchAddress(void* vp, const char* bn, void* bp);
+    int tchainGetBranchEntry(void*, const char*, int, void*);
 
     unsigned int vectorSizeI(void* vp);
     unsigned int vectorSizeC(void* vp);

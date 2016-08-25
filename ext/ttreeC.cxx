@@ -7,7 +7,7 @@ using namespace std;
 
 void* tchain(const char* tn) {
     TChain *cp = new TChain(tn);
-    cp->SetBranchStatus("*", 1);
+    cp->SetBranchStatus("*", false);
     return (void*) cp;
 }
 
@@ -21,10 +21,12 @@ int tchainGetEntry(void* vp, int i) {
     return cp->GetEntry(i);
 }
 
-void tchainSetBranchAddress(void* vp, const char* bn, void* bp) {
+int tchainGetBranchEntry(void* vp, const char* bn, int i, void* bp) {
     TChain* cp = (TChain*) vp;
-    cp->SetBranchAddress(bn, bp);
-    return;
+    cp->SetBranchStatus(bn, true);
+    TBranch *b = cp->GetBranch(bn);
+    b->SetAddress(bp);
+    return b->GetEntry(i);
 }
 
 void tchainFree(void* vp) {
