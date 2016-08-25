@@ -82,6 +82,7 @@ readBranch s = do (cp, i) <- ask
 
     where go s' cp' i' bp' = do tmp <- calloc         -- TODO
                                 poke bp' =<< peek tmp -- this looks silly, but I need the bytes to contain only zeros...
+                                free tmp
                                 n <- withCString s' $ \n -> withForeignPtr cp' $ \p -> _tchainGetBranchEntry p n i' bp'
                                 if n > 0 then fromBranch bp' else fail $ "failed to read branch " ++ s'
 
