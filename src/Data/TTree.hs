@@ -145,10 +145,11 @@ tchain n = do s <- newCString n
               return $ TChain c HM.empty
 
 
-addFile :: TChain -> String -> IO ()
-addFile (TChain cp _) fn = do s <- newCString fn
-                              _ <- _tchainAdd cp s
-                              free s
+addFile :: TChain -> String -> IO TChain
+addFile (TChain cp cbs) fn = do s <- newCString fn
+                                _ <- _tchainAdd cp s
+                                free s
+                                return $ TChain cp cbs
 
 
 addBranch :: Storable a
