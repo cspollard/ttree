@@ -7,7 +7,6 @@
 
 module Data.TTree where
 
-
 import Foreign
 import Foreign.C.Types
 import Foreign.C.String
@@ -55,6 +54,15 @@ foreign import ccall "ttreeC.h vectorDataD" vectorDataD
     :: VecPtr Double -> Ptr Double
 
 
+-- I think there is probably a better way to do all of this, but since
+-- I need to know the type of each branch at *run time*, the many
+-- constructors to TBranch seem necessary.
+
+-- TTreeValue, which seems like a "double" of TBranch could hopefully
+-- be done away with some how, but for now I need it to be the pure
+-- equivalent of TBranch--and what people use in practice.
+
+
 class Storable a => Vectorizable a where
     vSize :: VecPtr a -> Int
     vData :: VecPtr a -> Ptr a
@@ -83,14 +91,14 @@ peekV v = peekArray (vSize v) (vData v)
 -- TODO
 -- vector<vector<int> > and similar won't work.
 
-               -- scalar branches
+               -- scalar values
 data TTreeValue = TVChar Char
                 | TVInt Int
                 | TVUInt CUInt
                 | TVLong CLong
                 | TVFloat Float
                 | TVDouble Double
-               -- vector branches
+               -- vector values
                 | TVVChar [Char]
                 | TVVInt [Int]
                 | TVVFloat [Float]
@@ -199,5 +207,11 @@ runChainN :: MonadIO m => Int -> TChain -> Producer m TTree
 runChainN n c = runChain c =$= takeC n
 
 
-projectChain :: MonadIO m => TChain -> (a -> TTree -> a) -> a -> m a
-projectChain c f x = runChain c $$ foldlC f x
+-- this class should be the main way in which people interact with
+-- TTrees.
+class FromTTree ft where
+    fromTTree :: TTree -> Maybe ft
+
+
+project :: (MonadIO m, FromTTree a) => TChain -> Producer m (Maybe a)
+project c = runChain c =$= mapC fromTTree
