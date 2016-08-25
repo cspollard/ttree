@@ -34,6 +34,8 @@ foreign import ccall "ttreeC.h tchainGetEntry" _tchainGetEntry
     :: VPtr -> Int -> IO Int
 foreign import ccall "ttreeC.h tchainSetBranchAddress" _tchainSetBranchAddress
     :: VPtr -> CString -> Ptr a -> IO ()
+foreign import ccall "ttreeC.h &tchainFree" _tchainFree
+    :: FunPtr (Ptr a -> IO ())
 
 foreign import ccall "ttreeC.h vectorSizeC" vectorSizeC
     :: VecPtr Char -> Int
@@ -131,7 +133,7 @@ readBranch (TBVFloat fp) = TVVFloat <$> withForeignPtr fp (peek >=> peekV)
 readBranch (TBVDouble fp) = TVVDouble <$> withForeignPtr fp (peek >=> peekV)
 
 
-data TChain = TChain { _cPtr :: VPtr
+data TChain = TChain { _cPtr :: ForeignPtr ()
                      , _cBranches :: HashMap String TBranch
                      } deriving Show
 
@@ -140,14 +142,14 @@ makeLenses ''TChain
 
 tchain :: String -> IO TChain
 tchain n = do s <- newCString n
-              c <- _tchain s
+              c <- newForeignPtr _tchainFree =<< _tchain s
               free s
               return $ TChain c HM.empty
 
 
 addFile :: TChain -> String -> IO TChain
 addFile (TChain cp cbs) fn = do s <- newCString fn
-                                _ <- _tchainAdd cp s
+                                _ <- withForeignPtr cp (flip _tchainAdd s)
                                 free s
                                 return $ TChain cp cbs
 
@@ -156,7 +158,7 @@ addBranch :: Storable a
           => (ForeignPtr a -> TBranch) -> String -> TChain -> IO TChain
 addBranch f n (TChain cp cbs) = do p <- mallocForeignPtr
                                    s <- newCString n
-                                   _ <- withForeignPtr p $ _tchainSetBranchAddress cp s
+                                   _ <- withForeignPtr cp $ \cp' -> withForeignPtr p (_tchainSetBranchAddress cp' s)
                                    free s
                                    return $ TChain cp (cbs & at n ?~ f p)
 
@@ -179,7 +181,7 @@ addBranchVD = addBranch TBVDouble
 
 
 getEntry :: Int -> TChain -> IO (Maybe TTree)
-getEntry i (TChain cp cbs) = do n <- _tchainGetEntry cp i
+getEntry i (TChain cp cbs) = do n <- withForeignPtr cp $ flip _tchainGetEntry i
                                 if n <= 0
                                    then return Nothing
                                    else Just <$> traverse (liftIO . readBranch) cbs

@@ -27,6 +27,12 @@ void tchainSetBranchAddress(void* vp, const char* bn, void** p) {
     return;
 }
 
+void tchainFree(void* vp) {
+    TChain* cp = (TChain*) vp;
+    delete vp;
+    return;
+}
+
 
 template <typename T>
 vector<T>* castVec(void* vp) {
