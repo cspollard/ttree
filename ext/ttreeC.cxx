@@ -1,12 +1,13 @@
 #include "ttreeC.h"
 #include "TChain.h"
+#include "TBranchElement.h"
 #include <vector>
 
 using namespace std;
 
 void* tchain(const char* tn) {
     TChain *cp = new TChain(tn);
-    cp->SetBranchStatus("*", 0);
+    cp->SetBranchStatus("*", 1);
     return (void*) cp;
 }
 
@@ -20,10 +21,9 @@ int tchainGetEntry(void* vp, int i) {
     return cp->GetEntry(i);
 }
 
-void tchainSetBranchAddress(void* vp, const char* bn, void** p) {
+void tchainSetBranchAddress(void* vp, const char* bn, void* bp) {
     TChain* cp = (TChain*) vp;
-    cp->SetBranchStatus(bn, 1);
-    cp->SetBranchAddress(bn, p);
+    cp->SetBranchAddress(bn, bp);
     return;
 }
 

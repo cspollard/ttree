@@ -1,22 +1,26 @@
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Data.TTree where
 
-import Foreign
+import Control.Lens
+import Conduit
+
+import Foreign hiding (void)
 import Foreign.C.Types
 import Foreign.C.String
 
-import Control.Lens
-import Conduit
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as HM
 
-import Control.Monad ((>=>))
+import Control.Monad ((>=>), (<=<), when)
+import Control.Monad.State
+import Data.Foldable (foldrM)
 
 
 -- void pointer
@@ -63,145 +67,104 @@ foreign import ccall "ttreeC.h vectorDataD" vectorDataD
 -- equivalent of TBranch--and what people use in practice.
 
 
-class Storable a => Vectorizable a where
-    vSize :: VecPtr a -> Int
-    vData :: VecPtr a -> Ptr a
+{-
+newtype STLVec a = STLVec { vecPtr :: ForeignPtr (Ptr ()) }
+                          deriving (Eq, Show)
 
-instance Vectorizable Char where
-    vSize = vectorSizeC
-    vData = vectorDataC
+class Storable a => Vecable a where
+    sizeV :: STLVec a -> Int
+    dataV :: STLVec a -> Ptr a
 
-instance Vectorizable Int where
-    vSize = vectorSizeI
-    vData = vectorDataI
+instance Vecable Char where
+    sizeV = withForeignPtr . vecPtr . vectorSizeC
+    dataV = withForeignPtr . vecPtr . vectorDataC
 
-instance Vectorizable Float where
-    vSize = vectorSizeF
-    vData = vectorDataF
+instance Vecable Int where
+    sizeV = withForeignPtr . vecPtr . vectorSizeI
+    dataV = withForeignPtr . vecPtr . vectorDataI
 
-instance Vectorizable Double where
-    vSize = vectorSizeD
-    vData = vectorDataD
+instance Vecable Float where
+    sizeV = withForeignPtr . vecPtr . vectorSizeF
+    dataV = withForeignPtr . vecPtr . vectorDataF
+
+instance Vecable Double where
+    sizeV = withForeignPtr . vecPtr . vectorSizeD
+    dataV = withForeignPtr . vecPtr . vectorDataD
 
 
-peekV :: Vectorizable a => VecPtr a -> IO [a]
-peekV v = peekArray (vSize v) (vData v)
+peekV :: Vecable a => VecPtr a -> IO [a]
+peekV v = peekArray (sizeV v) (dataV v)
+-}
+
+
 
 
 -- TODO
 -- vector<vector<int> > and similar won't work.
-
-               -- scalar values
-data TTreeValue = TVChar Char
-                | TVInt Int
-                | TVUInt CUInt
-                | TVLong CLong
-                | TVFloat Float
-                | TVDouble Double
-               -- vector values
-                | TVVChar [Char]
-                | TVVInt [Int]
-                | TVVFloat [Float]
-                | TVVDouble [Double]
-                deriving Show
-
-makePrisms ''TTreeValue
-
-type TTree = HashMap String TTreeValue
-
-
             -- scalar branches
-data TBranch = TBChar (ForeignPtr Char)
-             | TBInt (ForeignPtr Int)
-             | TBUInt (ForeignPtr CUInt)
-             | TBLong (ForeignPtr CLong)
-             | TBFloat (ForeignPtr Float)
-             | TBDouble (ForeignPtr Double)
-            -- vector branches
-             | TBVChar (ForeignPtr (VecPtr Char))
-             | TBVInt (ForeignPtr (VecPtr Int))
-             | TBVFloat (ForeignPtr (VecPtr Float))
-             | TBVDouble (ForeignPtr (VecPtr Double))
-             deriving Show
 
-makePrisms ''TBranch
-
-
-
-readBranch :: TBranch -> IO TTreeValue
-readBranch (TBChar fp) = TVChar <$> withForeignPtr fp peek
-readBranch (TBInt fp) = TVInt <$> withForeignPtr fp peek
-readBranch (TBUInt fp) = TVUInt <$> withForeignPtr fp peek
-readBranch (TBLong fp) = TVLong <$> withForeignPtr fp peek
-readBranch (TBFloat fp) = TVFloat <$> withForeignPtr fp peek
-readBranch (TBDouble fp) = TVDouble <$> withForeignPtr fp peek
-readBranch (TBVChar fp) = TVVChar <$> withForeignPtr fp (peek >=> peekV)
-readBranch (TBVInt fp) = TVVInt <$> withForeignPtr fp (peek >=> peekV)
-readBranch (TBVFloat fp) = TVVFloat <$> withForeignPtr fp (peek >=> peekV)
-readBranch (TBVDouble fp) = TVVDouble <$> withForeignPtr fp (peek >=> peekV)
-
-
-data TChain = TChain { _cPtr :: ForeignPtr ()
-                     , _cBranches :: HashMap String TBranch
-                     } deriving Show
-
-makeLenses ''TChain
+type TChain = ForeignPtr ()
 
 
 tchain :: String -> IO TChain
-tchain n = do s <- newCString n
-              c <- newForeignPtr _tchainFree =<< _tchain s
-              free s
-              return $ TChain c HM.empty
+tchain n = withCString n $ newForeignPtr _tchainFree <=< _tchain
 
 
-addFile :: TChain -> String -> IO TChain
-addFile (TChain cp cbs) fn = do s <- newCString fn
-                                _ <- withForeignPtr cp (flip _tchainAdd s)
-                                free s
-                                return $ TChain cp cbs
+addFile :: TChain -> String -> IO ()
+addFile cp fn = withCString fn $ \s -> void (withForeignPtr cp (`_tchainAdd` s))
 
 
-addBranch :: Storable a
-          => (ForeignPtr a -> TBranch) -> String -> TChain -> IO TChain
-addBranch f n (TChain cp cbs) = do p <- mallocForeignPtr
-                                   s <- newCString n
-                                   _ <- withForeignPtr cp $ \cp' -> withForeignPtr p (_tchainSetBranchAddress cp' s)
-                                   free s
-                                   return $ TChain cp (cbs & at n ?~ f p)
+type ChainRead m a = StateT (TChain, Int, HashMap String VPtr) m a
+
+getEntry :: MonadIO m => a -> ChainRead m (Maybe a)
+getEntry x = do (cp, i, _) <- get
+                n <- liftIO $ withForeignPtr cp $ flip _tchainGetEntry i
+                return $ if n > 0 then Just x else Nothing
 
 
-addBranchC, addBranchVC, addBranchI, addBranchU, addBranchL, addBranchVI
-    :: String -> TChain -> IO TChain
-addBranchC = addBranch TBChar
-addBranchVC = addBranch TBVChar
-addBranchI = addBranch TBInt
-addBranchU = addBranch TBUInt
-addBranchL = addBranch TBLong
-addBranchVI = addBranch TBVInt
+readBranch :: (MonadIO m, Branchable a, Storable (PtrType a)) => String -> StateT (TChain, Int, HashMap String VPtr) m a
+readBranch s = do (cp, i, hm) <- get
 
-addBranchF, addBranchVF, addBranchD, addBranchVD
-    :: String -> TChain -> IO TChain
-addBranchF = addBranch TBFloat
-addBranchVF = addBranch TBVFloat
-addBranchD = addBranch TBDouble
-addBranchVD = addBranch TBVDouble
+                  case hm ^? ix s of
+                       Just p  -> liftIO . fromBranch . castPtr $ p
+                       Nothing -> do bp <- liftIO calloc
+                                     put (cp, i, at s ?~ castPtr bp $ hm)
+                                     liftIO $ withCString s $ \n -> withForeignPtr cp $ \p -> _tchainSetBranchAddress p n bp
+                                     liftIO $ fromBranch bp
 
 
-getEntry :: Int -> TChain -> IO (Maybe TTree)
-getEntry i (TChain cp cbs) = do n <- withForeignPtr cp $ flip _tchainGetEntry i
-                                if n <= 0
-                                   then return Nothing
-                                   else Just <$> traverse (liftIO . readBranch) cbs
+
+class Branchable b where
+    type PtrType b :: *
+    fromBranch :: Ptr (PtrType b) -> IO b
+
+instance Branchable Float where
+    type PtrType Float = Float
+    fromBranch = peek
+
+instance Branchable CLong where
+    type PtrType CLong = CLong
+    fromBranch = peek
 
 
-runChain :: MonadIO m => TChain -> Producer m TTree
-runChain c = loop 0 c
-    where loop i c' = do mc <- liftIO (getEntry i c')
-                         case mc of
-                              Nothing -> return ()
-                              Just tt -> yield tt >> loop (i+1) c'
+class FromChain fc where
+    fromChain :: MonadIO m => ChainRead m fc
 
+data Event = Event Float CLong deriving Show
+
+instance FromChain Event where
+    fromChain = Event <$> readBranch "mu" <*> readBranch "eventNumber"
+
+
+runChain :: MonadIO m => ChainRead (ConduitM i o m) o -> TChain -> ConduitM i o m ()
+runChain f c = loop c 0 mempty
+    where loop c' i hm = do (ms, (_, _, hm')) <- runStateT (f >>= getEntry) (c', i, hm)
+                            case ms of
+                                 Just x  -> yield x >> loop c' (i+1) hm'
+                                 Nothing -> return ()
+
+
+{-
 
 runChainN :: MonadIO m => Int -> TChain -> Producer m TTree
 runChainN n c = runChain c =$= takeC n
@@ -210,8 +173,8 @@ runChainN n c = runChain c =$= takeC n
 -- this class should be the main way in which people interact with
 -- TTrees.
 class FromTTree ft where
-    fromTTree :: TTree -> Maybe ft
+    fromBranches :: Hashmap String TBranch -> Maybe ft
+    neededBranches :: HashMap String (Storable a => ForeignPtr a -> TBranch )
 
 
-project :: (MonadIO m, FromTTree a) => TChain -> Producer m (Maybe a)
-project c = runChain c =$= mapC fromTTree
+-}
