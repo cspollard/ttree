@@ -80,9 +80,10 @@ readBranch :: (MonadIO m, Branchable a, Storable (PtrType a)) => String -> Chain
 readBranch s = do (cp, i) <- ask
                   liftIO . alloca $ go s cp i
 
-    where go s' cp' i' bp' = do print bp'
+    where go s' cp' i' bp' = do tmp <- calloc         -- TODO
+                                poke bp' =<< peek tmp -- this looks silly, but I need the bytes to contain only zeros...
                                 n <- withCString s' $ \n -> withForeignPtr cp' $ \p -> _tchainGetBranchEntry p n i' bp'
-                                if n > 0 then fromBranch bp' else fail $ "failed to read branch" ++ s
+                                if n > 0 then fromBranch bp' else fail $ "failed to read branch " ++ s'
 
 
 
@@ -130,7 +131,7 @@ instance Vecable Double where
 
 instance Vecable a => Branchable [a] where
     type PtrType [a] = VecPtr a
-    fromBranch p = print p >> (peek >=> peekV) p
+    fromBranch = peek >=> peekV
 
 
 class FromChain fc where
