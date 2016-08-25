@@ -29,7 +29,7 @@ void tchainSetBranchAddress(void* vp, const char* bn, void** p) {
 
 void tchainFree(void* vp) {
     TChain* cp = (TChain*) vp;
-    delete vp;
+    delete cp;
     return;
 }
 
