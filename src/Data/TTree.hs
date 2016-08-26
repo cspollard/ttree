@@ -14,7 +14,7 @@ import Foreign hiding (void)
 import Foreign.C.Types
 import Foreign.C.String
 
-import Control.Monad ((>=>), (<=<), void)
+import Control.Monad ((>=>))
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Except
 
@@ -22,15 +22,13 @@ import Control.Monad.Trans.Except
 -- void pointer
 type VPtr = Ptr ()
 
-foreign import ccall "ttreeC.h tchain" _tchain
-    :: CString -> IO VPtr
-foreign import ccall "ttreeC.h tchainAdd" _tchainAdd
-    :: VPtr -> CString -> IO Int
-foreign import ccall "ttreeC.h tchainGetEntry" _tchainGetEntry
+foreign import ccall "ttreeC.h ttree" _ttree
+    :: CString -> CString -> IO VPtr
+foreign import ccall "ttreeC.h ttreeGetEntry" _ttreeGetEntry
     :: VPtr -> Int -> IO Int
-foreign import ccall "ttreeC.h tchainGetBranchEntry" _tchainGetBranchEntry
+foreign import ccall "ttreeC.h ttreeGetBranchEntry" _ttreeGetBranchEntry
     :: VPtr -> CString -> Int -> Ptr a -> IO Int
-foreign import ccall "ttreeC.h &tchainFree" _tchainFree
+foreign import ccall "ttreeC.h &ttreeFree" _ttreeFree
     :: FunPtr (Ptr a -> IO ())
 
 foreign import ccall "ttreeC.h vectorSizeC" vectorSizeC
@@ -51,35 +49,29 @@ foreign import ccall "ttreeC.h vectorDataD" vectorDataD
     :: VecPtr Double -> Ptr Double
 
 
+type TTree = ForeignPtr ()
 
 
--- TODO
--- vector<vector<int> > and similar won't work.
-            -- scalar branches
-
-type TChain = ForeignPtr ()
-
-
-tchain :: String -> IO TChain
-tchain n = withCString n $ newForeignPtr _tchainFree <=< _tchain
+ttree :: String -> String -> IO TTree
+ttree tn fn = do tn' <- newCString tn
+                 fn' <- newCString fn
+                 tp <- newForeignPtr _ttreeFree =<< _ttree tn' fn'
+                 free tn' >> free fn'
+                 return tp
 
 
-addFile :: TChain -> String -> IO ()
-addFile cp fn = withCString fn $ \s -> void (withForeignPtr cp (`_tchainAdd` s))
+type TTreeRead m a = ReaderT (TTree, Int) (ExceptT String m) a
 
-
-type ChainRead m a = ReaderT (TChain, Int) (ExceptT String m) a
-
--- getEntry :: MonadIO m => a -> ChainRead m (Maybe a)
+-- getEntry :: MonadIO m => a -> TTreeRead m (Maybe a)
 -- getEntry x = do (cp, i, _) <- get
-                -- n <- liftIO $ withForeignPtr cp $ flip _tchainGetEntry i
+                -- n <- liftIO $ withForeignPtr cp $ flip _ttreeGetEntry i
                 -- return $ if n > 0 then Just x else Nothing
 
 
-readBranch :: (MonadIO m, Branchable a, Storable (PtrType a)) => String -> ChainRead m a
+readBranch :: (MonadIO m, Branchable a, Storable (PtrType a)) => String -> TTreeRead m a
 readBranch s = do (cp, i) <- ask
                   bp <- liftIO calloc
-                  n <- liftIO $ withCString s $ \s' -> withForeignPtr cp $ \cp' -> _tchainGetBranchEntry cp' s' i bp
+                  n <- liftIO $ withCString s $ \s' -> withForeignPtr cp $ \cp' -> _ttreeGetBranchEntry cp' s' i bp
                   if n <= 0
                      then fail $ "failed to read branch " ++ s
                      else liftIO $ fromBranch bp <* free bp
@@ -152,21 +144,21 @@ instance Vecable a => Branchable [a] where
     fromBranch = peek >=> peekV
 
 
-class FromChain fc where
-    fromChain :: MonadIO m => ChainRead m fc
+class FromTTree fc where
+    fromTTree :: MonadIO m => TTreeRead m fc
 
 
-runChain :: Monad m => ChainRead (ConduitM i o m) o -> TChain -> ConduitM i o m ()
-runChain f c = loop c 0 
+runTTree :: Monad m => TTreeRead (ConduitM i o m) o -> TTree -> ConduitM i o m ()
+runTTree f c = loop c 0 
     where loop c' i = do ms <- runExceptT $ runReaderT f (c', i)
                          case ms of
                               Right x  -> yield x >> loop c' (i+1)
                               Left err -> fail err
 
 
-runChainN :: Monad m => Int -> ChainRead (ConduitM i o m) o -> TChain -> ConduitM i o m ()
-runChainN n f c = runChain f c =$= takeC n
+runTTreeN :: Monad m => Int -> TTreeRead (ConduitM i o m) o -> TTree -> ConduitM i o m ()
+runTTreeN n f c = runTTree f c =$= takeC n
 
 
-project :: (MonadIO m, FromChain fc) => TChain -> Producer m fc
-project = runChain fromChain
+project :: (MonadIO m, FromTTree fc) => TTree -> Producer m fc
+project = runTTree fromTTree

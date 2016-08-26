@@ -1,36 +1,32 @@
 #include "ttreeC.h"
-#include "TChain.h"
-#include "TBranchElement.h"
+#include "TFile.h"
+#include "TTree.h"
 #include <vector>
 
 using namespace std;
 
-void* tchain(const char* tn) {
-    TChain *cp = new TChain(tn);
-    cp->SetBranchStatus("*", false);
-    return (void*) cp;
+void* ttree(const char* tn, const char* fn) {
+    TFile* f = TFile::Open(fn);
+    TTree* tp = (TTree*) f->Get(tn);
+    tp->SetBranchStatus("*", false);
+    return (void*) tp;
 }
 
-int tchainAdd(void* vp, const char* fn) {
-    TChain* cp = (TChain*) vp;
-    return cp->Add(fn);
+int ttreeGetEntry(void* vp, int i) {
+    TTree* tp = (TTree*) vp;
+    return tp->GetEntry(i);
 }
 
-int tchainGetEntry(void* vp, int i) {
-    TChain* cp = (TChain*) vp;
-    return cp->GetEntry(i);
-}
-
-int tchainGetBranchEntry(void* vp, const char* bn, int i, void* bp) {
-    TChain* cp = (TChain*) vp;
-    cp->SetBranchStatus(bn, true);
-    TBranch *b = cp->GetBranch(bn);
+int ttreeGetBranchEntry(void* vp, const char* bn, int i, void* bp) {
+    TTree* tp = (TTree*) vp;
+    tp->SetBranchStatus(bn, true);
+    TBranch *b = tp->GetBranch(bn);
     b->SetAddress(bp);
     return b->GetEntry(i);
 }
 
-void tchainFree(void* vp) {
-    TChain* cp = (TChain*) vp;
+void ttreeFree(void* vp) {
+    TTree* cp = (TTree*) vp;
     delete cp;
     return;
 }
