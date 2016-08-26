@@ -16,7 +16,7 @@ import Foreign.C.String
 
 import Control.Monad ((>=>))
 import Control.Monad.Trans.Reader
-import Control.Monad.Trans.Except
+import Control.Monad.Trans.Maybe
 
 
 -- void pointer
@@ -60,7 +60,7 @@ ttree tn fn = do tn' <- newCString tn
                  return tp
 
 
-type TTreeRead m a = ReaderT (TTree, Int) (ExceptT String m) a
+type TTreeRead m a = ReaderT (TTree, Int) (MaybeT m) a
 
 -- getEntry :: MonadIO m => a -> TTreeRead m (Maybe a)
 -- getEntry x = do (cp, i, _) <- get
@@ -150,15 +150,15 @@ class FromTTree fc where
 
 runTTree :: Monad m => TTreeRead (ConduitM i o m) o -> TTree -> ConduitM i o m ()
 runTTree f c = loop c 0 
-    where loop c' i = do ms <- runExceptT $ runReaderT f (c', i)
+    where loop c' i = do ms <- runMaybeT $ runReaderT f (c', i)
                          case ms of
-                              Right x  -> yield x >> loop c' (i+1)
-                              Left err -> fail err
+                              Just x  -> yield x >> loop c' (i+1)
+                              Nothing -> return ()
 
 
 runTTreeN :: Monad m => Int -> TTreeRead (ConduitM i o m) o -> TTree -> ConduitM i o m ()
 runTTreeN n f c = runTTree f c =$= takeC n
 
 
-project :: (MonadIO m, FromTTree fc) => TTree -> Producer m fc
+project :: (MonadIO m, FromTTree fc) => TTree -> ConduitM i fc m ()
 project = runTTree fromTTree

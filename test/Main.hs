@@ -1,9 +1,10 @@
 module Main where
 
-import Data.TTree
 import Conduit
 import System.Environment (getArgs)
 import Foreign.C.Types (CLong)
+import Control.Monad (forM_)
+import Data.TTree
 
 data Event = Event Float CLong [Float] [Float] [Float] deriving Show
 
@@ -15,7 +16,7 @@ instance FromTTree Event where
                       <*> readBranch "jet_phi"
 
 main :: IO ()
-main = do (cn:fn:_) <- getArgs
-          c <-  ttree cn fn
+main = do (tn:fns) <- getArgs
+          ts <- mapM (ttree tn) fns
 
-          project c $$ mapM_C (print :: Event -> IO ())
+          forM_ ts $ \t -> print =<< (project t =$= mapMC (print :: Event -> IO ()) $$ lengthC)
