@@ -90,42 +90,61 @@ class Branchable b where
     type PtrType b :: *
     fromBranch :: Ptr (PtrType b) -> IO b
 
-instance Branchable Float where
-    type PtrType Float = Float
+instance Branchable Char where
+    type PtrType Char = Char
+    fromBranch = peek
+
+instance Branchable Int where
+    type PtrType Int = Int
+    fromBranch = peek
+
+instance Branchable CUInt where
+    type PtrType CUInt = CUInt
     fromBranch = peek
 
 instance Branchable CLong where
     type PtrType CLong = CLong
     fromBranch = peek
 
+instance Branchable Float where
+    type PtrType Float = Float
+    fromBranch = peek
+
+instance Branchable Double where
+    type PtrType Double = Double
+    fromBranch = peek
+
 
 -- pointer to a c++ vector
-newtype VecPtr a = VecPtr { _vptr :: VPtr } deriving (Show, Storable)
-
-peekV :: Vecable a => VecPtr a -> IO [a]
-peekV v = peekArray (sizeV v) (dataV v)
+newtype VecPtr a = VecPtr VPtr deriving (Show, Storable)
 
 
-class Storable a => Vecable a where
+class Vecable a where
     sizeV :: VecPtr a -> Int
     dataV :: VecPtr a -> Ptr a
+    peekV :: VecPtr a -> IO [a]
 
 
 instance Vecable Char where
     sizeV = vectorSizeC
     dataV = vectorDataC
+    peekV v = peekArray (sizeV v) (dataV v)
 
 instance Vecable Int where
     sizeV = vectorSizeI
     dataV = vectorDataI
+    peekV v = peekArray (sizeV v) (dataV v)
 
 instance Vecable Float where
     sizeV = vectorSizeF
     dataV = vectorDataF
+    peekV v = peekArray (sizeV v) (dataV v)
 
 instance Vecable Double where
     sizeV = vectorSizeD
     dataV = vectorDataD
+    peekV v = peekArray (sizeV v) (dataV v)
+
 
 
 instance Vecable a => Branchable [a] where
@@ -135,15 +154,6 @@ instance Vecable a => Branchable [a] where
 
 class FromChain fc where
     fromChain :: MonadIO m => ChainRead m fc
-
-data Event = Event Float CLong [Float] [Float] [Float] deriving Show
-
-instance FromChain Event where
-    fromChain = Event <$> readBranch "mu"
-                      <*> readBranch "eventNumber"
-                      <*> readBranch "jet_pt"
-                      <*> readBranch "jet_eta"
-                      <*> readBranch "jet_phi"
 
 
 runChain :: Monad m => ChainRead (ConduitM i o m) o -> TChain -> ConduitM i o m ()
@@ -156,3 +166,7 @@ runChain f c = loop c 0
 
 runChainN :: Monad m => Int -> ChainRead (ConduitM i o m) o -> TChain -> ConduitM i o m ()
 runChainN n f c = runChain f c =$= takeC n
+
+
+project :: (MonadIO m, FromChain fc) => TChain -> Producer m fc
+project = runChain fromChain
