@@ -16,7 +16,7 @@ import Foreign.C.String
 
 import Control.Monad ((>=>), (<=<), void)
 import Control.Monad.Trans.Reader
-import Control.Monad.Trans.Maybe
+import Control.Monad.Trans.Except
 
 
 -- void pointer
@@ -68,7 +68,7 @@ addFile :: TChain -> String -> IO ()
 addFile cp fn = withCString fn $ \s -> void (withForeignPtr cp (`_tchainAdd` s))
 
 
-type ChainRead m a = ReaderT (TChain, Int) (MaybeT m) a
+type ChainRead m a = ReaderT (TChain, Int) (ExceptT String m) a
 
 -- getEntry :: MonadIO m => a -> ChainRead m (Maybe a)
 -- getEntry x = do (cp, i, _) <- get
@@ -158,10 +158,10 @@ class FromChain fc where
 
 runChain :: Monad m => ChainRead (ConduitM i o m) o -> TChain -> ConduitM i o m ()
 runChain f c = loop c 0 
-    where loop c' i = do ms <- runMaybeT $ runReaderT f (c', i)
+    where loop c' i = do ms <- runExceptT $ runReaderT f (c', i)
                          case ms of
-                              Just x  -> yield x >> loop c' (i+1)
-                              Nothing -> return ()
+                              Right x  -> yield x >> loop c' (i+1)
+                              Left err -> fail err
 
 
 runChainN :: Monad m => Int -> ChainRead (ConduitM i o m) o -> TChain -> ConduitM i o m ()
