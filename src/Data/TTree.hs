@@ -6,7 +6,12 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Data.TTree where
+module Data.TTree ( ttree
+                  , Branchable(..), readBranch
+                  , FromTTree(..)
+                  , runTTree, runTTreeN, project
+                  , MonadIO(..)
+                  ) where
 
 import Conduit
 
@@ -17,6 +22,8 @@ import Foreign.C.String
 import Control.Monad ((>=>))
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Maybe
+
+import Control.Applicative (ZipList(..))
 
 
 -- void pointer
@@ -60,22 +67,11 @@ ttree tn fn = do tn' <- newCString tn
                  return tp
 
 
-type TTreeRead m a = ReaderT (TTree, Int) (MaybeT m) a
 
 -- getEntry :: MonadIO m => a -> TTreeRead m (Maybe a)
 -- getEntry x = do (cp, i, _) <- get
                 -- n <- liftIO $ withForeignPtr cp $ flip _ttreeGetEntry i
                 -- return $ if n > 0 then Just x else Nothing
-
-
-readBranch :: (MonadIO m, Branchable a, Storable (PtrType a)) => String -> TTreeRead m a
-readBranch s = do (cp, i) <- ask
-                  bp <- liftIO calloc
-                  n <- liftIO $ withCString s $ \s' -> withForeignPtr cp $ \cp' -> _ttreeGetBranchEntry cp' s' i bp
-                  if n <= 0
-                     then fail $ "failed to read branch " ++ s
-                     else liftIO $ fromBranch bp <* free bp
-
 
 
 class Branchable b where
@@ -142,6 +138,21 @@ instance Vecable Double where
 instance Vecable a => Branchable [a] where
     type PtrType [a] = VecPtr a
     fromBranch = peek >=> peekV
+
+instance Vecable a => Branchable (ZipList a) where
+    type PtrType (ZipList a) = VecPtr a
+    fromBranch = fmap ZipList . (peek >=> peekV)
+
+
+type TTreeRead m a = ReaderT (TTree, Int) (MaybeT m) a
+
+readBranch :: (MonadIO m, Branchable a, Storable (PtrType a)) => String -> TTreeRead m a
+readBranch s = do (cp, i) <- ask
+                  bp <- liftIO calloc
+                  n <- liftIO $ withCString s $ \s' -> withForeignPtr cp $ \cp' -> _ttreeGetBranchEntry cp' s' i bp
+                  if n <= 0
+                     then fail $ "failed to read branch " ++ s
+                     else liftIO $ fromBranch bp <* free bp
 
 
 class FromTTree fc where
