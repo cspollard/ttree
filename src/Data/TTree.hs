@@ -78,13 +78,11 @@ type ChainRead m a = ReaderT (TChain, Int) (MaybeT m) a
 
 readBranch :: (MonadIO m, Branchable a, Storable (PtrType a)) => String -> ChainRead m a
 readBranch s = do (cp, i) <- ask
-                  liftIO . alloca $ go s cp i
-
-    where go s' cp' i' bp' = do tmp <- calloc         -- TODO
-                                poke bp' =<< peek tmp -- this looks silly, but I need the bytes to contain only zeros...
-                                free tmp
-                                n <- withCString s' $ \n -> withForeignPtr cp' $ \p -> _tchainGetBranchEntry p n i' bp'
-                                if n > 0 then fromBranch bp' else fail $ "failed to read branch " ++ s'
+                  bp <- liftIO calloc
+                  n <- liftIO $ withCString s $ \s' -> withForeignPtr cp $ \cp' -> _tchainGetBranchEntry cp' s' i bp
+                  if n <= 0
+                     then fail $ "failed to read branch " ++ s
+                     else liftIO $ fromBranch bp <* free bp
 
 
 
