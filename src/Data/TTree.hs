@@ -23,7 +23,7 @@ import Control.Monad ((>=>))
 import Control.Monad.Primitive (RealWorld)
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Maybe
-import Data.Vector.Storable (MVector(..), Vector(..), freeze)
+import Data.Vector.Storable (MVector(..), Vector(..), unsafeFreeze)
 
 import Control.Applicative (ZipList(..))
 
@@ -128,7 +128,7 @@ instance Vecable Double where
 
 instance (Storable a, Vecable a) => Branchable (Vector a) where
     type PtrType (Vector a) = VecPtr a
-    fromBranch = peek >=> mvector >=> freeze
+    fromBranch = peek >=> mvector >=> unsafeFreeze
 
 
 type TTreeRead m a = ReaderT (TTree, Int) (MaybeT m) a
