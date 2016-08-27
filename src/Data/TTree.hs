@@ -23,8 +23,9 @@ import Control.Monad ((>=>))
 import Control.Monad.Primitive (RealWorld)
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Maybe
-import Data.Vector.Storable (MVector(..), Vector(..), unsafeFreeze)
 
+import Data.Vector.Storable hiding ((++))
+import qualified Data.Vector as V
 import Control.Applicative (ZipList(..))
 
 
@@ -77,31 +78,31 @@ ttree tn fn = do tn' <- newCString tn
 
 
 class Branchable b where
-    type PtrType b :: *
-    fromBranch :: Ptr (PtrType b) -> IO b
+    type HeapType b :: *
+    fromBranch :: Ptr (HeapType b) -> IO b
 
 instance Branchable Char where
-    type PtrType Char = Char
+    type HeapType Char = Char
     fromBranch = peek
 
 instance Branchable Int where
-    type PtrType Int = Int
+    type HeapType Int = Int
     fromBranch = peek
 
 instance Branchable CUInt where
-    type PtrType CUInt = CUInt
+    type HeapType CUInt = CUInt
     fromBranch = peek
 
 instance Branchable CLong where
-    type PtrType CLong = CLong
+    type HeapType CLong = CLong
     fromBranch = peek
 
 instance Branchable Float where
-    type PtrType Float = Float
+    type HeapType Float = Float
     fromBranch = peek
 
 instance Branchable Double where
-    type PtrType Double = Double
+    type HeapType Double = Double
     fromBranch = peek
 
 
@@ -109,36 +110,50 @@ instance Branchable Double where
 newtype VecPtr a = VecPtr VPtr deriving (Show, Storable)
 
 
-class Vecable a where
-    mvector :: VecPtr a -> IO (MVector RealWorld a)
-
+class Storable a => Vecable a where
+    sizeV :: VecPtr a -> Int
+    dataV :: VecPtr a -> Ptr a
+    toV :: VecPtr a -> IO (Vector a)
+    toV vp = flip unsafeFromForeignPtr0 (sizeV vp) <$> newForeignPtr_ (dataV vp)
 
 instance Vecable Char where
-    mvector vp = MVector (vectorSizeC vp) <$> newForeignPtr_ (vectorDataC vp)
+    sizeV = vectorSizeC
+    dataV = vectorDataC
 
 instance Vecable Int where
-    mvector vp = MVector (vectorSizeI vp) <$> newForeignPtr_ (vectorDataI vp)
+    sizeV = vectorSizeI
+    dataV = vectorDataI
 
 instance Vecable Float where
-    mvector vp = MVector (vectorSizeF vp) <$> newForeignPtr_ (vectorDataF vp)
+    sizeV = vectorSizeF
+    dataV = vectorDataF
 
 instance Vecable Double where
-    mvector vp = MVector (vectorSizeD vp) <$> newForeignPtr_ (vectorDataD vp)
+    sizeV = vectorSizeD
+    dataV = vectorDataD
 
 
-instance (Storable a, Vecable a) => Branchable (Vector a) where
-    type PtrType (Vector a) = VecPtr a
-    fromBranch = peek >=> mvector >=> unsafeFreeze
+instance Vecable a => Branchable (V.Vector a) where
+    type HeapType (V.Vector a) = VecPtr a
+    fromBranch = peek >=> toV >=> return . convert
+
+instance Vecable a => Branchable [a] where
+    type HeapType [a] = VecPtr a
+    fromBranch = peek >=> toV >=> return . toList
+
+instance Vecable a => Branchable (ZipList a) where
+    type HeapType (ZipList a) = VecPtr a
+    fromBranch = peek >=> toV >=> return . ZipList . toList
 
 
 type TTreeRead m a = ReaderT (TTree, Int) (MaybeT m) a
 
-readBranch :: (MonadIO m, Branchable a, Storable (PtrType a)) => String -> TTreeRead m a
+readBranch :: (MonadIO m, Branchable a, Storable (HeapType a)) => String -> TTreeRead m a
 readBranch s = do (cp, i) <- ask
                   bp <- liftIO calloc
                   n <- liftIO $ withCString s $ \s' -> withForeignPtr cp $ \cp' -> _ttreeGetBranchEntry cp' s' i bp
                   if n <= 0
-                     then fail $ "failed to read branch " ++ s
+                     then liftIO (free bp) >> fail ("failed to read branch " ++ s)
                      else liftIO $ fromBranch bp <* free bp
 
 

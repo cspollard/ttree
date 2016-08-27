@@ -5,7 +5,7 @@ import System.Environment (getArgs)
 import Foreign.C.Types (CLong)
 import Control.Monad (forM)
 import Data.TTree
-import Data.Vector.Storable (Vector)
+import Data.Vector (Vector)
 
 data Event = Event Float CLong (Vector Float) (Vector Float) (Vector Float) deriving Show
 
