@@ -8,7 +8,7 @@
 
 module Data.TTree ( ttree
                   , Branchable(..), readBranch
-                  , FromTTree(..)
+                  , TTreeRead, FromTTree(..)
                   , runTTree, runTTreeN, project
                   , MonadIO(..)
                   ) where
@@ -20,8 +20,10 @@ import Foreign.C.Types
 import Foreign.C.String
 
 import Control.Monad ((>=>))
+import Control.Monad.Primitive (RealWorld)
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Maybe
+import Data.Vector.Storable (MVector(..), Vector(..), freeze)
 
 import Control.Applicative (ZipList(..))
 
@@ -108,40 +110,25 @@ newtype VecPtr a = VecPtr VPtr deriving (Show, Storable)
 
 
 class Vecable a where
-    sizeV :: VecPtr a -> Int
-    dataV :: VecPtr a -> Ptr a
-    peekV :: VecPtr a -> IO [a]
+    mvector :: VecPtr a -> IO (MVector RealWorld a)
 
 
 instance Vecable Char where
-    sizeV = vectorSizeC
-    dataV = vectorDataC
-    peekV v = peekArray (sizeV v) (dataV v)
+    mvector vp = MVector (vectorSizeC vp) <$> newForeignPtr_ (vectorDataC vp)
 
 instance Vecable Int where
-    sizeV = vectorSizeI
-    dataV = vectorDataI
-    peekV v = peekArray (sizeV v) (dataV v)
+    mvector vp = MVector (vectorSizeI vp) <$> newForeignPtr_ (vectorDataI vp)
 
 instance Vecable Float where
-    sizeV = vectorSizeF
-    dataV = vectorDataF
-    peekV v = peekArray (sizeV v) (dataV v)
+    mvector vp = MVector (vectorSizeF vp) <$> newForeignPtr_ (vectorDataF vp)
 
 instance Vecable Double where
-    sizeV = vectorSizeD
-    dataV = vectorDataD
-    peekV v = peekArray (sizeV v) (dataV v)
+    mvector vp = MVector (vectorSizeD vp) <$> newForeignPtr_ (vectorDataD vp)
 
 
-
-instance Vecable a => Branchable [a] where
-    type PtrType [a] = VecPtr a
-    fromBranch = peek >=> peekV
-
-instance Vecable a => Branchable (ZipList a) where
-    type PtrType (ZipList a) = VecPtr a
-    fromBranch = fmap ZipList . (peek >=> peekV)
+instance (Storable a, Vecable a) => Branchable (Vector a) where
+    type PtrType (Vector a) = VecPtr a
+    fromBranch = peek >=> mvector >=> freeze
 
 
 type TTreeRead m a = ReaderT (TTree, Int) (MaybeT m) a
