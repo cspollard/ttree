@@ -157,8 +157,11 @@ readBranch s = do (cp, i) <- ask
                      else liftIO $ fromBranch bp <* free bp
 
 
-class FromTTree fc where
-    fromTTree :: MonadIO m => TTreeRead m fc
+class FromTTree a where
+    fromTTree :: MonadIO m => TTreeRead m a
+
+class FromTTreeV a where
+    fromTTreeV :: MonadIO m => Int -> TTreeRead m a
 
 
 runTTree :: Monad m => TTreeRead (ConduitM i o m) o -> TTree -> ConduitM i o m ()
