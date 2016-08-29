@@ -2,9 +2,9 @@
 extern "C" {
 #endif
     void* ttree(const char*, const char*);
-    int ttreeGetEntry(void*, int);
 
     void ttreeFree(void*);
+    void ttreeResetBranchAddresses(void*);
     int ttreeGetBranchEntry(void*, const char*, int, void*);
 
     unsigned int vectorSizeI(void* vp);

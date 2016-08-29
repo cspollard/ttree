@@ -12,9 +12,9 @@ void* ttree(const char* tn, const char* fn) {
     return (void*) tp;
 }
 
-int ttreeGetEntry(void* vp, int i) {
+void ttreeResetBranchAddresses(void* vp) {
     TTree* tp = (TTree*) vp;
-    return tp->GetEntry(i);
+    return tp->ResetBranchAddresses();
 }
 
 int ttreeGetBranchEntry(void* vp, const char* bn, int i, void* bp) {

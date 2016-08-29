@@ -15,27 +15,30 @@ module Data.TTree ( ttree
 
 import Conduit
 
+import Control.Lens
+import qualified Data.HashMap.Strict as HM
+
 import Foreign hiding (void)
 import Foreign.C.Types
 import Foreign.C.String
 
 import Control.Monad ((>=>))
-import Control.Monad.Primitive (RealWorld)
-import Control.Monad.Trans.Reader
+import Control.Monad.Trans.State
 import Control.Monad.Trans.Maybe
 
-import Data.Vector.Storable hiding ((++))
+import qualified Data.Vector.Storable as VS
 import qualified Data.Vector as V
 import Control.Applicative (ZipList(..))
 
 
 -- void pointer
 type VPtr = Ptr ()
+type FVPtr = ForeignPtr ()
 
 foreign import ccall "ttreeC.h ttree" _ttree
     :: CString -> CString -> IO VPtr
-foreign import ccall "ttreeC.h ttreeGetEntry" _ttreeGetEntry
-    :: VPtr -> Int -> IO Int
+foreign import ccall "ttreeC.h ttreeResetBranchAddresses" _ttreeResetBranchAddresses
+    :: VPtr -> IO ()
 foreign import ccall "ttreeC.h ttreeGetBranchEntry" _ttreeGetBranchEntry
     :: VPtr -> CString -> Int -> Ptr a -> IO Int
 foreign import ccall "ttreeC.h &ttreeFree" _ttreeFree
@@ -59,7 +62,7 @@ foreign import ccall "ttreeC.h vectorDataD" vectorDataD
     :: VecPtr Double -> Ptr Double
 
 
-type TTree = ForeignPtr ()
+type TTree = FVPtr
 
 
 ttree :: String -> String -> IO TTree
@@ -79,31 +82,31 @@ ttree tn fn = do tn' <- newCString tn
 
 class Branchable b where
     type HeapType b :: *
-    fromBranch :: Ptr (HeapType b) -> IO b
+    fromBranch :: ForeignPtr (HeapType b) -> IO b
 
 instance Branchable Char where
     type HeapType Char = Char
-    fromBranch = peek
+    fromBranch = flip withForeignPtr peek
 
 instance Branchable Int where
     type HeapType Int = Int
-    fromBranch = peek
+    fromBranch = flip withForeignPtr peek
 
 instance Branchable CUInt where
     type HeapType CUInt = CUInt
-    fromBranch = peek
+    fromBranch = flip withForeignPtr peek
 
 instance Branchable CLong where
     type HeapType CLong = CLong
-    fromBranch = peek
+    fromBranch = flip withForeignPtr peek
 
 instance Branchable Float where
     type HeapType Float = Float
-    fromBranch = peek
+    fromBranch = flip withForeignPtr peek
 
 instance Branchable Double where
     type HeapType Double = Double
-    fromBranch = peek
+    fromBranch = flip withForeignPtr peek
 
 
 -- pointer to a c++ vector
@@ -113,8 +116,8 @@ newtype VecPtr a = VecPtr VPtr deriving (Show, Storable)
 class Storable a => Vecable a where
     sizeV :: VecPtr a -> Int
     dataV :: VecPtr a -> Ptr a
-    toV :: VecPtr a -> IO (Vector a)
-    toV vp = flip unsafeFromForeignPtr0 (sizeV vp) <$> newForeignPtr_ (dataV vp)
+    toV :: VecPtr a -> IO (VS.Vector a)
+    toV vp = flip VS.unsafeFromForeignPtr0 (sizeV vp) <$> newForeignPtr_ (dataV vp)
 
 instance Vecable Char where
     sizeV = vectorSizeC
@@ -135,44 +138,46 @@ instance Vecable Double where
 
 instance Vecable a => Branchable (V.Vector a) where
     type HeapType (V.Vector a) = VecPtr a
-    fromBranch = peek >=> toV >=> return . convert
+    fromBranch = flip withForeignPtr $ peek >=> toV >=> return . VS.convert
 
 instance Vecable a => Branchable [a] where
     type HeapType [a] = VecPtr a
-    fromBranch = peek >=> toV >=> return . toList
+    fromBranch = flip withForeignPtr $ peek >=> toV >=> return . VS.toList
 
 instance Vecable a => Branchable (ZipList a) where
     type HeapType (ZipList a) = VecPtr a
-    fromBranch = peek >=> toV >=> return . ZipList . toList
+    fromBranch = flip withForeignPtr $ peek >=> toV >=> return . ZipList . VS.toList
 
 
-type TTreeRead m a = ReaderT (TTree, Int) (MaybeT m) a
+type TTreeRead m a = StateT (TTree, Int, HM.HashMap String FVPtr) (MaybeT m) a
 
 readBranch :: (MonadIO m, Branchable a, Storable (HeapType a)) => String -> TTreeRead m a
-readBranch s = do (cp, i) <- ask
-                  bp <- liftIO calloc
-                  n <- liftIO $ withCString s $ \s' -> withForeignPtr cp $ \cp' -> _ttreeGetBranchEntry cp' s' i bp
-                  if n <= 0
-                     then liftIO (free bp) >> fail ("failed to read branch " ++ s)
-                     else liftIO $ fromBranch bp <* free bp
+readBranch s = do (tp, i, hm) <- get
+                  case hm ^. at s of
+                       Just p  -> liftIO . fromBranch . castForeignPtr $ p
+                       Nothing -> do bp <- liftIO calloc
+                                     n <- liftIO $ withCString s $ \s' -> withForeignPtr tp $ \tp' -> _ttreeGetBranchEntry tp' s' i bp
+                                     p <- liftIO $ newForeignPtr finalizerFree bp
+                                     if n <= 0
+                                        then fail ("failed to read branch " ++ s)
+                                        else do put (tp, i, hm & at s .~ Just (castForeignPtr p))
+                                                liftIO $ fromBranch p
 
 
 class FromTTree a where
     fromTTree :: MonadIO m => TTreeRead m a
 
-class FromTTreeV a where
-    fromTTreeV :: MonadIO m => Int -> TTreeRead m a
 
-
-runTTree :: Monad m => TTreeRead (ConduitM i o m) o -> TTree -> ConduitM i o m ()
+runTTree :: MonadIO m => TTreeRead (ConduitM i o m) o -> TTree -> ConduitM i o m ()
 runTTree f c = loop c 0 
-    where loop c' i = do ms <- runMaybeT $ runReaderT f (c', i)
+    where loop c' i = do liftIO $ withForeignPtr c' _ttreeResetBranchAddresses
+                         ms <- runMaybeT $ evalStateT f (c', i, HM.empty)
                          case ms of
                               Just x  -> yield x >> loop c' (i+1)
                               Nothing -> return ()
 
 
-runTTreeN :: Monad m => Int -> TTreeRead (ConduitM i o m) o -> TTree -> ConduitM i o m ()
+runTTreeN :: MonadIO m => Int -> TTreeRead (ConduitM i o m) o -> TTree -> ConduitM i o m ()
 runTTreeN n f c = runTTree f c =$= takeC n
 
 
