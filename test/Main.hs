@@ -7,14 +7,15 @@ import Control.Monad (forM)
 import Data.TTree
 import Data.Vector (Vector)
 
-data Event = Event Float CLong (Vector Float) (Vector Float) (Vector Float) deriving Show
+data Event = Event Int Int Float (Vector Float) (Vector Float) (Vector Float) deriving Show
 
 instance FromTTree Event where
-    fromTTree = Event <$> readBranch "mu"
-                      <*> readBranch "eventNumber"
-                      <*> readBranch "jet_pt"
-                      <*> readBranch "jet_eta"
-                      <*> readBranch "jet_phi"
+    fromTTree = Event <$> readBranch "Run"
+                      <*> readBranch "Event"
+                      <*> readBranch "Mu"
+                      <*> readBranch "JetPt"
+                      <*> readBranch "JetEta"
+                      <*> readBranch "JetPhi"
 
 main :: IO ()
 main = do (tn:fns) <- getArgs
