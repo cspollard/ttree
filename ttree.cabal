@@ -22,8 +22,8 @@ library
   include-dirs:        ext/
   c-sources:           ext/ttreeC.cxx
   cc-options:          -std=c++11 -m64
-  extra-libraries:     stdc++ Tree m dl Core Core RIO Net Hist Graf Graf3d Gpad Tree Rint Postscript Matrix Physics MathCore
-  ghc-options:         -pgmlg++ -pgmcg++ -Wall
+  extra-libraries:     stdc++ m dl Core RIO Tree
+  ghc-options:         -pgmlg++ -pgmcg++ -Wall -optl-static
   build-depends:       base >=4.8 && <4.9
                      , primitive >=0.6 && <0.7
                      , lens >=4.9 && <5.0

@@ -116,8 +116,15 @@ newtype VecPtr a = VecPtr VPtr deriving (Show, Storable)
 class Storable a => Vecable a where
     sizeV :: VecPtr a -> Int
     dataV :: VecPtr a -> Ptr a
+
+    -- faster for accessing just one item
+    ixV :: MonadIO m => VecPtr a -> Int -> m a
+    v `ixV` i = liftIO . peek $ advancePtr (dataV v) i
+
+    -- faster for accessing all items together
     toV :: VecPtr a -> IO (VS.Vector a)
     toV vp = flip VS.unsafeFromForeignPtr0 (sizeV vp) <$> newForeignPtr_ (dataV vp)
+
 
 instance Vecable Char where
     sizeV = vectorSizeC
