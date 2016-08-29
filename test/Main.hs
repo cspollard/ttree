@@ -2,7 +2,6 @@ module Main where
 
 import Conduit
 import System.Environment (getArgs)
-import Foreign.C.Types (CLong)
 import Control.Monad (forM)
 import Data.TTree
 import Data.Vector (Vector)
