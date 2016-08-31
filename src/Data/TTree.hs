@@ -158,6 +158,9 @@ instance Vecable a => Branchable (ZipList a) where
 
 type TTreeRead m a = StateT (TTree, Int, HM.HashMap String FVPtr) (MaybeT m) a
 
+-- TODO
+-- something is memory-leaking
+-- I suspect it's in this function
 readBranch :: (MonadIO m, Branchable a, Storable (HeapType a)) => String -> TTreeRead m a
 readBranch s = do (tp, i, hm) <- get
                   case hm ^. at s of
