@@ -11,7 +11,6 @@ module Data.TTree ( ttree
                   , MonadIO(..)
                   ) where
 
-import Debug.Trace
 
 import Conduit
 
@@ -32,6 +31,8 @@ foreign import ccall "ttreeC.h ttree" _ttree
     :: CString -> CString -> IO VPtr
 foreign import ccall "ttreeC.h ttreeGetBranchEntry" _ttreeGetBranchEntry
     :: VPtr -> CString -> Int -> Ptr a -> IO Int
+foreign import ccall "ttreeC.h ttreeResetBranchAddress" _ttreeResetBranchAddress
+    :: VPtr -> CString -> IO ()
 foreign import ccall "ttreeC.h &ttreeFree" _ttreeFree
     :: FunPtr (Ptr a -> IO ())
 
@@ -58,6 +59,9 @@ readBranch s = do (tp, i) <- ask
                   n <- liftIO $ withCString s $ \s' -> withForeignPtr tp
                                               $ \tp' -> withForeignPtr bp
                                               $ \bp' -> _ttreeGetBranchEntry tp' s' i bp'
+
+                  liftIO $ withCString s $ \s' -> withForeignPtr tp
+                                         $ \tp' -> _ttreeResetBranchAddress tp' s'
 
                   if n <= 0
                      then fail $ "failed to read branch " ++ s

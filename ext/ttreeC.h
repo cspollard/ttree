@@ -4,8 +4,8 @@ extern "C" {
     void* ttree(const char*, const char*);
 
     void ttreeFree(void*);
-    void ttreeResetBranchAddresses(void*);
     int ttreeGetBranchEntry(void*, const char*, int, void*);
+    void ttreeResetBranchAddress(void *, const char*);
 
     unsigned int vectorSizeC(void* vp);
     unsigned int vectorSizeI(void* vp);

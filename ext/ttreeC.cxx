@@ -20,6 +20,13 @@ int ttreeGetBranchEntry(void* vp, const char* bn, int i, void* bp) {
     return b->GetEntry(i);
 }
 
+void ttreeResetBranchAddress(void *vp, const char* bn) {
+    TTree* tp = (TTree*) vp;
+    TBranch *b = tp->GetBranch(bn);
+    b->ResetAddress();
+    return;
+}
+
 void ttreeFree(void* vp) {
     TTree* cp = (TTree*) vp;
     delete cp;
