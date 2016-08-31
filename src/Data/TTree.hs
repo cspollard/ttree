@@ -13,6 +13,8 @@ module Data.TTree ( ttree
                   , MonadIO(..)
                   ) where
 
+import Debug.Trace
+
 import Conduit
 
 import Control.Lens
@@ -71,8 +73,6 @@ foreign import ccall "ttreeC.h vectorFreeD" vectorFreeD
     :: VecPtr Double -> IO ()
 
 
-foreign import ccall "wrapper" wrapFree :: (Ptr (VecPtr a) -> IO ()) -> IO (FunPtr (Ptr (VecPtr a) -> IO ()))
-
 
 type TTree = FVPtr
 
@@ -88,40 +88,31 @@ ttree tn fn = do tn' <- newCString tn
 
 class Branchable b where
     type HeapType b :: *
-
-    freeB :: IO (FinalizerPtr (HeapType b))
-
     fromB :: Ptr (HeapType b) -> IO b
 
 
 instance Branchable Char where
     type HeapType Char = Char
-    freeB = return finalizerFree
     fromB = peek
 
 instance Branchable Int where
     type HeapType Int = Int
-    freeB = return finalizerFree
     fromB = peek
 
 instance Branchable CUInt where
     type HeapType CUInt = CUInt
-    freeB = return finalizerFree
     fromB = peek
 
 instance Branchable CLong where
     type HeapType CLong = CLong
-    freeB = return finalizerFree
     fromB = peek
 
 instance Branchable Float where
     type HeapType Float = Float
-    freeB = return finalizerFree
     fromB = peek
 
 instance Branchable Double where
     type HeapType Double = Double
-    freeB = return finalizerFree
     fromB = peek
 
 
@@ -141,46 +132,42 @@ class Storable a => Vecable a where
 instance Vecable Char where
     sizeV = vectorSizeC
     dataV = vectorDataC
-    freeV = vectorFreeC
+    freeV = vectorFreeC . traceShowId
 
 instance Vecable Int where
     sizeV = vectorSizeI
     dataV = vectorDataI
-    freeV = vectorFreeI
+    freeV = vectorFreeI . traceShowId
 
 instance Vecable Float where
     sizeV = vectorSizeF
     dataV = vectorDataF
-    freeV = vectorFreeF
+    freeV = vectorFreeF . traceShowId
 
 instance Vecable Double where
     sizeV = vectorSizeD
     dataV = vectorDataD
-    freeV = vectorFreeD
+    freeV = vectorFreeD . traceShowId
+
+
 
 
 instance Vecable a => Branchable (V.Vector a) where
     type HeapType (V.Vector a) = VecPtr a
-    freeB = wrapFree $ \p -> do p' <- peek p
-                                freeV p'
-                                free p
-
-    fromB = fmap VS.convert <$> (peek >=> toV)
+    fromB vp = do p <- peek vp
+                  v <- VS.convert <$> toV p
+                  freeV p
+                  return v
 
 instance Vecable a => Branchable [a] where
     type HeapType [a] = VecPtr a
-    freeB = wrapFree $ \p -> do p' <- peek p
-                                freeV p'
-                                free p
-
-    fromB = fmap VS.toList <$> (peek >=> toV)
+    fromB vp = do p <- peek vp
+                  v <- VS.toList <$> toV p
+                  freeV p
+                  return v
 
 instance Vecable a => Branchable (ZipList a) where
     type HeapType (ZipList a) = VecPtr a
-    freeB = wrapFree $ \p -> do p' <- peek p
-                                freeV p'
-                                free p
-
     fromB = fmap ZipList <$> fromB
 
 
@@ -189,11 +176,13 @@ type TR m a = ReaderT (TTree, Int) (MaybeT m) a
 
 readBranch :: (MonadIO m, Branchable a, Storable (HeapType a)) => String -> TR m a
 readBranch s = do (cp, i) <- ask
-                  ffree <- liftIO freeB
-                  bp <- liftIO $ newForeignPtr ffree =<< calloc
+                  traceShow ("trying to read branch" ++ s) $ return ()
+                  bp <- liftIO $ newForeignPtr finalizerFree =<< calloc
                   n <- liftIO $ withCString s $ \s' -> withForeignPtr cp
                                               $ \cp' -> withForeignPtr bp
-                                              $ \bp' -> _ttreeGetBranchEntry cp' s' i (castPtr bp')
+                                              $ \bp' -> _ttreeGetBranchEntry cp' s' i bp'
+
+                  traceShow "branch address set." $ return ()
 
                   if n <= 0
                      then fail $ "failed to read branch " ++ s
