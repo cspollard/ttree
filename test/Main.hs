@@ -5,14 +5,14 @@ import Conduit
 import System.Environment (getArgs)
 import Foreign.C.Types (CLong)
 
-data Event = Event Float CLong [Float] [Float] [Float] deriving Show
+data Event = Event Float Int [Float] [Float] [Float] deriving Show
 
 instance FromChain Event where
-    fromChain = Event <$> readBranch "mu"
-                      <*> readBranch "eventNumber"
-                      <*> readBranch "jet_pt"
-                      <*> readBranch "jet_eta"
-                      <*> readBranch "jet_phi"
+    fromChain = Event <$> readBranch "Mu"
+                      <*> readBranch "Event"
+                      <*> readBranch "JetPt"
+                      <*> readBranch "JetEta"
+                      <*> readBranch "JetPhi"
 
 main :: IO ()
 main = do (cn:fns) <- getArgs
