@@ -7,15 +7,20 @@ extern "C" {
     void ttreeResetBranchAddresses(void*);
     int ttreeGetBranchEntry(void*, const char*, int, void*);
 
-    unsigned int vectorSizeI(void* vp);
     unsigned int vectorSizeC(void* vp);
-    unsigned int vectorSizeD(void* vp);
+    unsigned int vectorSizeI(void* vp);
     unsigned int vectorSizeF(void* vp);
+    unsigned int vectorSizeD(void* vp);
 
-    int*    vectorDataI(void* vp);
     char*   vectorDataC(void* vp);
-    double* vectorDataD(void* vp);
+    int*    vectorDataI(void* vp);
     float*  vectorDataF(void* vp);
+    double* vectorDataD(void* vp);
+
+    void vectorFreeC(void* vp);
+    void vectorFreeI(void* vp);
+    void vectorFreeF(void* vp);
+    void vectorFreeD(void* vp);
 #ifdef __cplusplus
 }
 #endif
