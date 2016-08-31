@@ -67,22 +67,30 @@ double* vectorDataD(void* vp) {
 }
 
 
-void vectorFreeC(void* vp) {
-    delete castVec<char>(vp);
+void vectorFreeC(void** vp) {
+    vector<char>** p = (vector<char>**) vp;
+    delete *p;
+    delete p;
     return;
 }
 
-void vectorFreeI(void* vp) {
-    delete castVec<int>(vp);
+void vectorFreeI(void** vp) {
+    vector<int>** p = (vector<int>**) vp;
+    delete *p;
+    delete p;
     return;
 }
 
-void vectorFreeF(void* vp) {
-    delete castVec<float>(vp);
+void vectorFreeF(void** vp) {
+    vector<float>** p = (vector<float>**) vp;
+    delete *p;
+    delete p;
     return;
 }
 
-void vectorFreeD(void* vp) {
-    delete castVec<double>(vp);
+void vectorFreeD(void** vp) {
+    vector<double>** p = (vector<double>**) vp;
+    delete *p;
+    delete p;
     return;
 }

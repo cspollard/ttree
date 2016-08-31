@@ -17,10 +17,10 @@ extern "C" {
     float*  vectorDataF(void* vp);
     double* vectorDataD(void* vp);
 
-    void vectorFreeC(void* vp);
-    void vectorFreeI(void* vp);
-    void vectorFreeF(void* vp);
-    void vectorFreeD(void* vp);
+    void vectorFreeC(void** vp);
+    void vectorFreeI(void** vp);
+    void vectorFreeF(void** vp);
+    void vectorFreeD(void** vp);
 #ifdef __cplusplus
 }
 #endif

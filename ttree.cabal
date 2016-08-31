@@ -17,6 +17,8 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     Data.TTree
+                     , Data.TBranch
+                     , Data.STLVec
   -- other-modules:       
   -- other-extensions:    
   include-dirs:        ext/

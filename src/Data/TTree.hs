@@ -1,8 +1,6 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 
@@ -12,8 +10,6 @@ module Data.TTree ( ttree
                   , runTTree, runTTreeN, project
                   , MonadIO(..)
                   ) where
-
-import Debug.Trace
 
 import Conduit
 
@@ -32,6 +28,9 @@ import qualified Data.Vector.Storable as VS
 import qualified Data.Vector as V
 import Control.Applicative (ZipList(..))
 
+import Data.STLVec
+import Data.TBranch
+
 
 -- void pointer
 type VPtr = Ptr ()
@@ -44,38 +43,8 @@ foreign import ccall "ttreeC.h ttreeGetBranchEntry" _ttreeGetBranchEntry
 foreign import ccall "ttreeC.h &ttreeFree" _ttreeFree
     :: FunPtr (Ptr a -> IO ())
 
-foreign import ccall "ttreeC.h vectorSizeC" vectorSizeC
-    :: VecPtr Char -> Int
-foreign import ccall "ttreeC.h vectorDataC" vectorDataC
-    :: VecPtr Char -> Ptr Char
-foreign import ccall "ttreeC.h vectorFreeC" vectorFreeC
-    :: VecPtr Char -> IO ()
-
-foreign import ccall "ttreeC.h vectorSizeI" vectorSizeI
-    :: VecPtr Int -> Int
-foreign import ccall "ttreeC.h vectorDataI" vectorDataI
-    :: VecPtr Int -> Ptr Int
-foreign import ccall "ttreeC.h vectorFreeI" vectorFreeI
-    :: VecPtr Int -> IO ()
-
-foreign import ccall "ttreeC.h vectorSizeF" vectorSizeF
-    :: VecPtr Float -> Int
-foreign import ccall "ttreeC.h vectorDataF" vectorDataF
-    :: VecPtr Float -> Ptr Float
-foreign import ccall "ttreeC.h vectorFreeF" vectorFreeF
-    :: VecPtr Float -> IO ()
-
-foreign import ccall "ttreeC.h vectorSizeD" vectorSizeD
-    :: VecPtr Double -> Int
-foreign import ccall "ttreeC.h vectorDataD" vectorDataD
-    :: VecPtr Double -> Ptr Double
-foreign import ccall "ttreeC.h vectorFreeD" vectorFreeD
-    :: VecPtr Double -> IO ()
-
-
 
 type TTree = FVPtr
-
 
 ttree :: String -> String -> IO TTree
 ttree tn fn = do tn' <- newCString tn
@@ -85,104 +54,15 @@ ttree tn fn = do tn' <- newCString tn
                  return tp
 
 
-
-class Branchable b where
-    type HeapType b :: *
-    fromB :: Ptr (HeapType b) -> IO b
-
-
-instance Branchable Char where
-    type HeapType Char = Char
-    fromB = peek
-
-instance Branchable Int where
-    type HeapType Int = Int
-    fromB = peek
-
-instance Branchable CUInt where
-    type HeapType CUInt = CUInt
-    fromB = peek
-
-instance Branchable CLong where
-    type HeapType CLong = CLong
-    fromB = peek
-
-instance Branchable Float where
-    type HeapType Float = Float
-    fromB = peek
-
-instance Branchable Double where
-    type HeapType Double = Double
-    fromB = peek
-
-
--- pointer to a c++ vector
-newtype VecPtr a = VecPtr { vecPtr :: VPtr } deriving (Show, Storable)
-
-
-class Storable a => Vecable a where
-    sizeV :: VecPtr a -> Int
-    dataV :: VecPtr a -> Ptr a
-    freeV :: VecPtr a -> IO ()
-
-    toV :: VecPtr a -> IO (VS.Vector a)
-    toV vp = flip VS.unsafeFromForeignPtr0 (sizeV vp) <$> newForeignPtr_ (dataV vp)
-
-
-instance Vecable Char where
-    sizeV = vectorSizeC
-    dataV = vectorDataC
-    freeV = vectorFreeC . traceShowId
-
-instance Vecable Int where
-    sizeV = vectorSizeI
-    dataV = vectorDataI
-    freeV = vectorFreeI . traceShowId
-
-instance Vecable Float where
-    sizeV = vectorSizeF
-    dataV = vectorDataF
-    freeV = vectorFreeF . traceShowId
-
-instance Vecable Double where
-    sizeV = vectorSizeD
-    dataV = vectorDataD
-    freeV = vectorFreeD . traceShowId
-
-
-
-
-instance Vecable a => Branchable (V.Vector a) where
-    type HeapType (V.Vector a) = VecPtr a
-    fromB vp = do p <- peek vp
-                  v <- VS.convert <$> toV p
-                  freeV p
-                  return v
-
-instance Vecable a => Branchable [a] where
-    type HeapType [a] = VecPtr a
-    fromB vp = do p <- peek vp
-                  v <- VS.toList <$> toV p
-                  freeV p
-                  return v
-
-instance Vecable a => Branchable (ZipList a) where
-    type HeapType (ZipList a) = VecPtr a
-    fromB = fmap ZipList <$> fromB
-
-
 type TR m a = ReaderT (TTree, Int) (MaybeT m) a
 
-
-readBranch :: (MonadIO m, Branchable a, Storable (HeapType a)) => String -> TR m a
+readBranch :: (MonadIO m, Branchable a, Storable (HeapType a), Freeable (HeapType a))
+           => String -> TR m a
 readBranch s = do (cp, i) <- ask
-                  traceShow ("trying to read branch" ++ s) $ return ()
-                  bp <- liftIO $ newForeignPtr finalizerFree =<< calloc
+                  bp <- liftIO $ newForeignPtr free' =<< calloc
                   n <- liftIO $ withCString s $ \s' -> withForeignPtr cp
                                               $ \cp' -> withForeignPtr bp
                                               $ \bp' -> _ttreeGetBranchEntry cp' s' i bp'
-
-                  traceShow "branch address set." $ return ()
 
                   if n <= 0
                      then fail $ "failed to read branch " ++ s
