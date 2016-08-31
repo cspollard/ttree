@@ -11,24 +11,16 @@ module Data.TTree ( ttree
                   , MonadIO(..)
                   ) where
 
+import Debug.Trace
+
 import Conduit
 
-import Control.Lens
-import qualified Data.HashMap.Strict as HM
-
 import Foreign hiding (void)
-import Foreign.C.Types
 import Foreign.C.String
 
-import Control.Monad ((>=>))
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Maybe
 
-import qualified Data.Vector.Storable as VS
-import qualified Data.Vector as V
-import Control.Applicative (ZipList(..))
-
-import Data.STLVec
 import Data.TBranch
 
 
@@ -58,15 +50,18 @@ type TR m a = ReaderT (TTree, Int) (MaybeT m) a
 
 readBranch :: (MonadIO m, Branchable a, Storable (HeapType a), Freeable (HeapType a))
            => String -> TR m a
-readBranch s = do (cp, i) <- ask
+readBranch s = do (tp, i) <- ask
+                  liftIO . print $ "about to calloc branch " ++ s
+                  liftIO . print $ "in event " ++ show i
                   bp <- liftIO $ newForeignPtr free' =<< calloc
-                  n <- liftIO $ withCString s $ \s' -> withForeignPtr cp
-                                              $ \cp' -> withForeignPtr bp
-                                              $ \bp' -> _ttreeGetBranchEntry cp' s' i bp'
+                  liftIO . print $ "calloced " ++ show bp
+                  n <- liftIO $ withCString s $ \s' -> withForeignPtr tp
+                                              $ \tp' -> withForeignPtr bp
+                                              $ \bp' -> _ttreeGetBranchEntry tp' s' i bp'
 
                   if n <= 0
                      then fail $ "failed to read branch " ++ s
-                     else liftIO $ withForeignPtr bp fromB
+                     else liftIO $ print ("reading branch " ++ s) >> withForeignPtr bp fromB
 
 
 class FromTTree a where

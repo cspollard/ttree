@@ -25,7 +25,8 @@ library
   c-sources:           ext/ttreeC.cxx
   cc-options:          -std=c++11 -m64
   extra-libraries:     stdc++ m dl Core RIO Tree
-  ghc-options:         -pgmlg++ -pgmcg++ -Wall -optl-static
+  ghc-options:         -pgmlg++ -Wall
+  ghc-prof-options:    -pgmlg++ -Wall -prof -auto-all -caf-all
   build-depends:       base >=4.8 && <4.9
                      , primitive >=0.6 && <0.7
                      , lens >=4.9 && <5.0
@@ -45,3 +46,4 @@ executable ttreeTest
                      , ttree >=0.1
   default-language:    Haskell2010
   ghc-options:         -pgmlg++ -Wall
+  ghc-prof-options:    -pgmlg++ -Wall -prof -auto-all -caf-all
