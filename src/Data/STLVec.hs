@@ -8,6 +8,8 @@
 
 module Data.STLVec where
 
+import Debug.Trace
+
 import Foreign hiding (void)
 
 import qualified Data.Vector.Storable as VS
@@ -44,13 +46,13 @@ foreign import ccall "ttreeC.h &vectorFreeD" vectorFreeD
 -- pointer to a c++ vector
 newtype VecPtr a = VecPtr { vecPtr :: Ptr () } deriving (Show, Storable)
 
-class Storable a => Vecable a where
+class (Show a, Storable a) => Vecable a where
     sizeV :: VecPtr a -> Int
     dataV :: VecPtr a -> Ptr a
     freeV :: FunPtr (Ptr (VecPtr a) -> IO ())
 
     toV :: VecPtr a -> IO (VS.Vector a)
-    toV vp = flip VS.unsafeFromForeignPtr0 (sizeV vp) <$> newForeignPtr_ (dataV vp)
+    toV vp = traceShow (sizeV vp) . traceShowId . flip VS.unsafeFromForeignPtr0 (sizeV vp) <$> newForeignPtr_ (dataV vp)
 
 
 instance Vecable Char where
