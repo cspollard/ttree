@@ -8,8 +8,6 @@
 
 module Data.STLVec where
 
-import Debug.Trace
-
 import Foreign hiding (void)
 
 import qualified Data.Vector.Storable as VS
@@ -52,7 +50,7 @@ class (Show a, Storable a) => Vecable a where
     freeV :: FunPtr (Ptr (VecPtr a) -> IO ())
 
     toV :: VecPtr a -> IO (VS.Vector a)
-    toV vp = traceShow (sizeV vp) . traceShowId . flip VS.unsafeFromForeignPtr0 (sizeV vp) <$> newForeignPtr_ (dataV vp)
+    toV vp = VS.freeze . VS.MVector (sizeV vp) =<< newForeignPtr_ (dataV vp)
 
 
 instance Vecable Char where
