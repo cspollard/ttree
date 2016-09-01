@@ -1,3 +1,4 @@
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -7,20 +8,27 @@ extern "C" {
     int ttreeGetBranchEntry(void*, const char*, int, void*);
     void ttreeResetBranchAddress(void *, const char*);
 
-    unsigned int vectorSizeC(void* vp);
-    unsigned int vectorSizeI(void* vp);
-    unsigned int vectorSizeF(void* vp);
-    unsigned int vectorSizeD(void* vp);
+    unsigned int vectorSizeC(void*);
+    unsigned int vectorSizeI(void*);
+    unsigned int vectorSizeF(void*);
+    unsigned int vectorSizeD(void*);
 
-    char*   vectorDataC(void* vp);
-    int*    vectorDataI(void* vp);
-    float*  vectorDataF(void* vp);
-    double* vectorDataD(void* vp);
+    char*   vectorDataC(void*);
+    int*    vectorDataI(void*);
+    float*  vectorDataF(void*);
+    double* vectorDataD(void*);
 
-    void vectorFreeC(void** vp);
-    void vectorFreeI(void** vp);
-    void vectorFreeF(void** vp);
-    void vectorFreeD(void** vp);
+    void vectorFreeC(void**);
+    void vectorFreeI(void**);
+    void vectorFreeF(void**);
+    void vectorFreeD(void**);
+
+    void* vectorNewVD();
+    int vectorSizeVD(void*);
+    void* vectorDataVD(void*);
+    void* vectorBPtrVD(void*);
+    void vectorFreeVD(void*);
+
 #ifdef __cplusplus
 }
 #endif

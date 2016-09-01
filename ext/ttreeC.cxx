@@ -41,6 +41,9 @@ vector<T>* castVec(void* vp) {
 }
 
 
+// TODO
+// macro-ize this.
+
 unsigned int vectorSizeC(void* vp) {
     return castVec<char>(vp)->size();
 }
@@ -102,3 +105,66 @@ void vectorFreeD(void** vp) {
     delete p;
     return;
 }
+
+template <typename T>
+int vectorSizeV(void* vp) {
+cout << "int vectorSizeV(void* vp) {" << endl;
+    vv<T>* vvp = (vv<T>*) vp;
+    return vvp->vecs->size();
+}
+
+template <typename T>
+void* vectorBPtrV(void* vp) {
+cout << "void* vectorBPtrV(void* vp) {" << endl;
+    vv<T>* vvp = (vv<T>*) vp;
+    return (void*) vvp->vecs;
+}
+
+template <typename T>
+void* vectorDataV(void* vp) {
+cout << "void* vectorDataV(void* vp) {" << endl;
+    vv<T>* vvp = (vv<T>*) vp;
+    vvp->ptrs->resize(vvp->vecs->size());
+
+    for (unsigned int i = 0; i < vvp->vecs->size(); i++)
+        (*vvp->ptrs)[i] = &((*vvp->vecs)[i]);
+
+    return (void*) vvp->ptrs;
+}
+
+template <typename T>
+void vectorFreeV(void* vp) {
+cout << "void vectorFreeV(void* vp) {" << endl;
+    vv<T>* vvp = (vv<T>*) vp;
+
+    delete vvp->vecs;
+    delete vvp->ptrs;
+
+    return;
+}
+
+
+#define VVFUNCS(T,C)            \
+typedef vv<T> vv##C;            \
+                                \
+void* vectorNewV##C() {         \
+    return vectorNewV<T>();     \
+}                               \
+                                \
+int vectorSizeV##C(void* vp) {  \
+    return vectorSizeV<T>(vp);  \
+}                               \
+                                \
+void* vectorBPtrV##C(void* vp) {\
+    return vectorBPtrV<T>(vp);  \
+}                               \
+                                \
+void* vectorDataV##C(void* vp) {\
+    return vectorDataV<T>(vp);  \
+}                               \
+                                \
+void vectorFreeV##C(void* vp) { \
+    return vectorFreeV<T>(vp);  \
+}
+
+VVFUNCS(double,D)

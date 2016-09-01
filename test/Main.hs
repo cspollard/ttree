@@ -4,9 +4,10 @@ import Conduit
 import System.Environment (getArgs)
 import Control.Monad (forM)
 import Data.TTree
+import Data.STLVec (VVector)
 import Data.Vector (Vector)
 
-data Event = Event Int Int Float (Vector Float) (Vector Float) (Vector Float) deriving Show
+data Event = Event Int Int Float (Vector Float) (Vector Float) (Vector Float) (VVector Double) deriving Show
 
 instance FromTTree Event where
     fromTTree = Event <$> readBranch "Run"
@@ -15,6 +16,7 @@ instance FromTTree Event where
                       <*> readBranch "JetPt"
                       <*> readBranch "JetEta"
                       <*> readBranch "JetPhi"
+                      <*> readBranch "JetTracks"
 
 main :: IO ()
 main = do (tn:fns) <- getArgs

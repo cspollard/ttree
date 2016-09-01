@@ -4,20 +4,19 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE CPP #-}
 
-module Data.TBranch ( Branchable(..), Freeable(..) ) where
+module Data.TBranch ( Branchable(..), FPtrable(..) ) where
 
 import Foreign hiding (void)
 import Foreign.C.Types (CLong)
 
 import Control.Monad ((>=>))
 
-import qualified Data.Vector.Storable as VS
-import qualified Data.Vector as V
+import Data.Vector
 
 import Control.Applicative (ZipList(..))
 
-
 import Data.STLVec
+
 
 class Branchable b where
     type HeapType b :: *
@@ -44,36 +43,54 @@ instance Branchable Double where
     type HeapType Double = Double
     fromB = peek
 
-instance Vecable a => Branchable (V.Vector a) where
-    type HeapType (V.Vector a) = VecPtr a
-    fromB = fmap VS.convert <$> (peek >=> toV)
+instance Vecable a => Branchable (Vector a) where
+    type HeapType (Vector a) = VecPtr a
+    fromB = peek >=> toV
 
 instance Vecable a => Branchable [a] where
     type HeapType [a] = VecPtr a
-    fromB = fmap VS.toList <$> (peek >=> toV)
+    fromB = fmap toList <$> (peek >=> toV)
 
 instance Vecable a => Branchable (ZipList a) where
     type HeapType (ZipList a) = VecPtr a
     fromB = fmap ZipList <$> fromB
 
+instance VVecable a => Branchable (VVector a) where
+    type HeapType (VVector a) = VVec a
+    fromB = peek >=> toVV
 
-class Freeable a where
-    free' :: FunPtr (Ptr a -> IO ())
 
-instance Freeable Char where
-    free' = finalizerFree
+class FPtrable a where
+    -- the handle on this object
+    fptr :: IO (ForeignPtr a)
+    -- the actual branch pointer that should be loaded
+    bptr :: ForeignPtr a -> IO (ForeignPtr ())
 
-instance Freeable Int where
-    free' = finalizerFree
 
-instance Freeable CLong where
-    free' = finalizerFree
+instance FPtrable Char where
+    fptr = newForeignPtr finalizerFree =<< calloc
+    bptr = return . castForeignPtr
 
-instance Freeable Float where
-    free' = finalizerFree
+instance FPtrable Int where
+    fptr = newForeignPtr finalizerFree =<< calloc
+    bptr = return . castForeignPtr
 
-instance Freeable Double where
-    free' = finalizerFree
+instance FPtrable CLong where
+    fptr = newForeignPtr finalizerFree =<< calloc
+    bptr = return . castForeignPtr
 
-instance Vecable a => Freeable (VecPtr a) where
-    free' = freeV
+instance FPtrable Float where
+    fptr = newForeignPtr finalizerFree =<< calloc
+    bptr = return . castForeignPtr
+
+instance FPtrable Double where
+    fptr = newForeignPtr finalizerFree =<< calloc
+    bptr = return . castForeignPtr
+
+instance Vecable a => FPtrable (VecPtr a) where
+    fptr = newForeignPtr freeV =<< calloc
+    bptr = return . castForeignPtr
+
+instance VVecable a => FPtrable (VVecPtr a) where
+    fptr = newForeignPtr freeVV =<< (vvecPtr <$> newVV)
+    bptr vv = newForeignPtr_ =<< withForeignPtr vv (\p -> bptrVV <$> peek p)

@@ -1,57 +1,64 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE CPP #-}
 
-module Data.STLVec where
+module Data.STLVec ( VecPtr(..), Vecable(..)
+                   , VVecPtr(..), VVecable(..)
+                   , VVector(..)
+                   ) where
 
 import Foreign hiding (void)
 
 import qualified Data.Vector.Storable as VS
+import qualified Data.Vector as V
 
 foreign import ccall "ttreeC.h vectorSizeC" vectorSizeC
-    :: VecPtr Char -> Int
+    :: Ptr (Vec Char) -> Int
 foreign import ccall "ttreeC.h vectorDataC" vectorDataC
-    :: VecPtr Char -> Ptr Char
+    :: Ptr (Vec Char) -> Ptr Char
 foreign import ccall "ttreeC.h &vectorFreeC" vectorFreeC
-    :: FunPtr (Ptr (VecPtr Char) -> IO ())
+    :: FunPtr (Ptr (Vec Char) -> IO ())
 
 foreign import ccall "ttreeC.h vectorSizeI" vectorSizeI
-    :: VecPtr Int -> Int
+    :: Ptr (Vec Int) -> Int
 foreign import ccall "ttreeC.h vectorDataI" vectorDataI
-    :: VecPtr Int -> Ptr Int
+    :: Ptr (Vec Int) -> Ptr Int
 foreign import ccall "ttreeC.h &vectorFreeI" vectorFreeI
-    :: FunPtr (Ptr (VecPtr Int) -> IO ())
+    :: FunPtr (Ptr (Vec Int) -> IO ())
 
 foreign import ccall "ttreeC.h vectorSizeF" vectorSizeF
-    :: VecPtr Float -> Int
+    :: Ptr (Vec Float) -> Int
 foreign import ccall "ttreeC.h vectorDataF" vectorDataF
-    :: VecPtr Float -> Ptr Float
+    :: Ptr (Vec Float) -> Ptr Float
 foreign import ccall "ttreeC.h &vectorFreeF" vectorFreeF
-    :: FunPtr (Ptr (VecPtr Float) -> IO ())
+    :: FunPtr (Ptr (Vec Float) -> IO ())
 
 foreign import ccall "ttreeC.h vectorSizeD" vectorSizeD
-    :: VecPtr Double -> Int
+    :: Ptr (Vec Double) -> Int
 foreign import ccall "ttreeC.h vectorDataD" vectorDataD
-    :: VecPtr Double -> Ptr Double
+    :: Ptr (Vec Double) -> Ptr Double
 foreign import ccall "ttreeC.h &vectorFreeD" vectorFreeD
-    :: FunPtr (Ptr (VecPtr Double) -> IO ())
+    :: FunPtr (Ptr (Vec Double) -> IO ())
 
+foreign import ccall "ttreeC.h vectorNewVD" vectorNewVD
+    :: IO (Ptr (VVec Double))
+foreign import ccall "ttreeC.h vectorSizeVD" vectorSizeVD
+    :: Ptr (VVec Double) -> Int
+foreign import ccall "ttreeC.h vectorDataVD" vectorDataVD
+    :: Ptr (VVec Double) -> Ptr (Vec Double)
+foreign import ccall "ttreeC.h vectorBPtrVD" vectorBPtrVD
+    :: Ptr (VVec Double) -> Ptr ()
+foreign import ccall "ttreeC.h &vectorFreeVD" vectorFreeVD
+    :: FunPtr (Ptr (VVec Double) -> IO ())
 
--- pointer to a c++ vector
-newtype VecPtr a = VecPtr { vecPtr :: Ptr () } deriving (Show, Storable)
+instance Storable () where
+    sizeOf _ = 0
+    alignment _ = 1
+    peek _ = return ()
+    poke _ _ = return ()
 
-class (Show a, Storable a) => Vecable a where
-    sizeV :: VecPtr a -> Int
-    dataV :: VecPtr a -> Ptr a
-    freeV :: FunPtr (Ptr (VecPtr a) -> IO ())
-
-    toV :: VecPtr a -> IO (VS.Vector a)
-    toV vp = VS.freeze . VS.MVector (sizeV vp) =<< newForeignPtr_ (dataV vp)
-
+-- pointer to a c++ vector<T>
+newtype Vec a = Vec () deriving Storable
 
 instance Vecable Char where
     sizeV = vectorSizeC
@@ -72,3 +79,27 @@ instance Vecable Double where
     sizeV = vectorSizeD
     dataV = vectorDataD
     freeV = vectorFreeD
+
+
+-- wrapper around a c++ vector<vector<T> >
+newtype VVec a = VVec ((Ptr ()) deriving Storable
+newtype VVector a = VVector { fromVVector :: V.Vector (V.Vector a) } deriving Show
+
+class Vecable a => VVecable a where
+    newVV :: IO (Ptr (VVec a))
+    sizeVV :: Ptr (VVec a) -> Int
+    dataVV :: Ptr (VVec a) -> Ptr (Vec a)
+    bptrVV :: Ptr (VVec a) -> Ptr ()
+    freeVV :: FunPtr (Ptr (VVec a) -> IO ())
+
+    toVV :: Ptr (VVec a) -> IO (VVector a)
+    toVV vp = do vv <- VS.freeze . VS.MVector (sizeVV vp) =<< newForeignPtr_ (dataVV vp)
+                 fmap VVector . mapM toV $ VS.convert vv
+
+
+instance VVecable Double where
+    newVV = vectorNewVD
+    sizeVV = vectorSizeVD
+    dataVV = vectorDataVD
+    bptrVV = vectorBPtrVD
+    freeVV = vectorFreeVD
