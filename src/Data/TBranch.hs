@@ -7,6 +7,7 @@
 module Data.TBranch ( Branchable(..), Freeable(..) ) where
 
 import Foreign hiding (void)
+import Foreign.C.Types (CLong)
 
 import Control.Monad ((>=>))
 
@@ -14,6 +15,7 @@ import qualified Data.Vector.Storable as VS
 import qualified Data.Vector as V
 
 import Control.Applicative (ZipList(..))
+
 
 import Data.STLVec
 
@@ -24,6 +26,10 @@ class Branchable b where
 
 instance Branchable Char where
     type HeapType Char = Char
+    fromB = peek
+
+instance Branchable CLong where
+    type HeapType CLong = CLong
     fromB = peek
 
 instance Branchable Int where
@@ -58,6 +64,9 @@ instance Freeable Char where
     free' = finalizerFree
 
 instance Freeable Int where
+    free' = finalizerFree
+
+instance Freeable CLong where
     free' = finalizerFree
 
 instance Freeable Float where
