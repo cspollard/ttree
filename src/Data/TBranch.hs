@@ -57,6 +57,15 @@ instance Vecable a => Branchable (ZipList a) where
     fromB = fmap ZipList <$> fromB
 
 
+newtype VVector a = VVector { fromVVector :: V.Vector (V.Vector a) } deriving Show
+
+instance Vecable a => Branchable (VVector a) where
+    type HeapType (VVector a) = VecPtr (VecPtr a)
+    fromB vvp = do vpp <- readVV vvp
+                   vv <- VS.freeze . VS.MVector (sizeV vvp) =<< newForeignPtr vectorFreeP vpp
+                   fmap VVector . mapM toV $ VS.convert vv
+
+
 class Freeable a where
     free' :: FunPtr (Ptr a -> IO ())
 
