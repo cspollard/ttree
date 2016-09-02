@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Data.TTree ( ttree
+                  , VVector(..)
                   , Branchable(..), readBranch
                   , TR, FromTTree(..)
                   , runTTree, runTTreeN, project
