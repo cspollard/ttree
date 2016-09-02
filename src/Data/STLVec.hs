@@ -9,41 +9,40 @@
 module Data.STLVec where
 
 import Foreign hiding (void)
-import Foreign.C.Types (CInt)
 
 import qualified Data.Vector.Storable as VS
 import qualified Data.Vector as V
 
 foreign import ccall "ttreeC.h vectorSizeC" vectorSizeC
-    :: VecPtr Char -> CInt
+    :: VecPtr Char -> Int
 foreign import ccall "ttreeC.h vectorDataC" vectorDataC
     :: VecPtr Char -> Ptr Char
 foreign import ccall "ttreeC.h &vectorFreeC" vectorFreeC
     :: FunPtr (Ptr (VecPtr Char) -> IO ())
 
 foreign import ccall "ttreeC.h vectorSizeI" vectorSizeI
-    :: VecPtr CInt -> CInt
+    :: VecPtr Int -> Int
 foreign import ccall "ttreeC.h vectorDataI" vectorDataI
-    :: VecPtr CInt -> Ptr CInt
+    :: VecPtr Int -> Ptr Int
 foreign import ccall "ttreeC.h &vectorFreeI" vectorFreeI
-    :: FunPtr (Ptr (VecPtr CInt) -> IO ())
+    :: FunPtr (Ptr (VecPtr Int) -> IO ())
 
 foreign import ccall "ttreeC.h vectorSizeF" vectorSizeF
-    :: VecPtr Float -> CInt
+    :: VecPtr Float -> Int
 foreign import ccall "ttreeC.h vectorDataF" vectorDataF
     :: VecPtr Float -> Ptr Float
 foreign import ccall "ttreeC.h &vectorFreeF" vectorFreeF
     :: FunPtr (Ptr (VecPtr Float) -> IO ())
 
 foreign import ccall "ttreeC.h vectorSizeD" vectorSizeD
-    :: VecPtr Double -> CInt
+    :: VecPtr Double -> Int
 foreign import ccall "ttreeC.h vectorDataD" vectorDataD
     :: VecPtr Double -> Ptr Double
 foreign import ccall "ttreeC.h &vectorFreeD" vectorFreeD
     :: FunPtr (Ptr (VecPtr Double) -> IO ())
 
 foreign import ccall "ttreeC.h vectorSizeP" vectorSizeP
-    :: VecPtr (VecPtr a) -> CInt
+    :: VecPtr (VecPtr a) -> Int
 foreign import ccall "ttreeC.h vectorDataP" vectorDataP
     :: VecPtr (VecPtr a) -> Ptr (VecPtr a)
 foreign import ccall "ttreeC.h &vectorFreeP" vectorFreeP
@@ -55,9 +54,9 @@ foreign import ccall "ttreeC.h &vvFreeC" vvFreeC
     :: FunPtr (Ptr (VVecPtr Char) -> IO ())
 
 foreign import ccall "ttreeC.h vvReadI" vvReadI
-    :: VVecPtr CInt -> IO (VecPtr (VecPtr CInt))
+    :: VVecPtr Int -> IO (VecPtr (VecPtr Int))
 foreign import ccall "ttreeC.h &vvFreeI" vvFreeI
-    :: FunPtr (Ptr (VVecPtr CInt) -> IO ())
+    :: FunPtr (Ptr (VVecPtr Int) -> IO ())
 
 foreign import ccall "ttreeC.h vvReadF" vvReadF
     :: VVecPtr Float -> IO (VecPtr (VecPtr Float))
@@ -89,27 +88,27 @@ class (Show a, Storable a) => Vecable a where
 
 
 instance Vecable Char where
-    sizeV = fromInteger . vectorSizeC
+    sizeV = vectorSizeC
     dataV = vectorDataC
     freeV = vectorFreeC
 
-instance Vecable CInt where
-    sizeV = fromInteger . vectorSizeI
+instance Vecable Int where
+    sizeV = vectorSizeI
     dataV = vectorDataI
     freeV = vectorFreeI
 
 instance Vecable Float where
-    sizeV = fromInteger . vectorSizeF
+    sizeV = vectorSizeF
     dataV = vectorDataF
     freeV = vectorFreeF
 
 instance Vecable Double where
-    sizeV = fromInteger . vectorSizeD
+    sizeV = vectorSizeD
     dataV = vectorDataD
     freeV = vectorFreeD
 
 instance Vecable (VecPtr a) where
-    sizeV = fromInteger . vectorSizeP
+    sizeV = vectorSizeP
     dataV = vectorDataP
     freeV = vectorFreeP
 
@@ -123,7 +122,7 @@ instance VVecable Char where
     readVV = vvReadC
     freeVV = vvFreeC
 
-instance VVecable CInt where
+instance VVecable Int where
     readVV = vvReadI
     freeVV = vvFreeI
 
