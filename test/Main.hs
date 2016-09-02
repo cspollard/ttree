@@ -8,7 +8,7 @@ import Data.Vector (Vector)
 import Data.TBranch
 import Data.TTree
 
-data Event = Event Int Int Float (Vector Float) (Vector Float) (Vector Float) (VVector Double) deriving Show
+data Event = Event CInt CInt Float (Vector Float) (Vector Float) (Vector Float) (VVector Double) deriving Show
 
 instance FromTTree Event where
     fromTTree = Event <$> readBranch "Run"

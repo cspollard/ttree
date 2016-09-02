@@ -4,12 +4,12 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE CPP #-}
 
-module Data.TBranch ( Branchable(..), Freeable(..), VVector(..) ) where
+module Data.TBranch ( Branchable(..), Freeable(..), VVector(..), CInt(..), CChar(..) ) where
 
 import Foreign hiding (void)
-import Foreign.C.Types (CLong)
 
 import Control.Monad ((>=>))
+import Foreign.C.Types (CInt(..), CChar(..))
 
 import qualified Data.Vector.Storable as VS
 import qualified Data.Vector as V
@@ -24,16 +24,12 @@ class Branchable b where
     fromB :: Ptr (HeapType b) -> IO b
 
 
-instance Branchable Char where
-    type HeapType Char = Char
+instance Branchable CChar where
+    type HeapType CChar = CChar
     fromB = peek
 
-instance Branchable CLong where
-    type HeapType CLong = CLong
-    fromB = peek
-
-instance Branchable Int where
-    type HeapType Int = Int
+instance Branchable CInt where
+    type HeapType CInt = CInt
     fromB = peek
 
 instance Branchable Float where
@@ -64,7 +60,7 @@ instance VVecable a => Branchable (VVector a) where
     fromB vvp = do vpp <- (peek >=> readVV) vvp
 
                    -- immediately freeze vpp and free it
-                   vv <- VS.freeze . VS.MVector (sizeV vpp)
+                   vv <- VS.freeze . VS.MVector (fromEnum $ sizeV vpp)
                             =<< newForeignPtr_ (dataV vpp)
 
                    p' <- malloc
@@ -77,13 +73,10 @@ instance VVecable a => Branchable (VVector a) where
 class Freeable a where
     free' :: FunPtr (Ptr a -> IO ())
 
-instance Freeable Char where
+instance Freeable CChar where
     free' = finalizerFree
 
-instance Freeable Int where
-    free' = finalizerFree
-
-instance Freeable CLong where
+instance Freeable CInt where
     free' = finalizerFree
 
 instance Freeable Float where
