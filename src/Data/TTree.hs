@@ -5,7 +5,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Data.TTree ( ttree
-                  , Branchable(..), readBranch
+                  , module Data.TBranch
+                  , readBranch
                   , TR, FromTTree(..)
                   , runTTree, runTTreeN, project
                   , MonadIO(..)

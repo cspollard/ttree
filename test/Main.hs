@@ -5,7 +5,6 @@ import System.Environment (getArgs)
 import Control.Monad (forM)
 import Data.Vector (Vector)
 
-import Data.TBranch
 import Data.TTree
 
 data Event = Event CInt CInt Float (Vector Float) (Vector Float) (Vector Float) (VVector Double) deriving Show
