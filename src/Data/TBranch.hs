@@ -4,7 +4,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE CPP #-}
 
-module Data.TBranch ( Branchable(..), Freeable(..) ) where
+module Data.TBranch ( Branchable(..), Freeable(..), VVector(..) ) where
 
 import Foreign hiding (void)
 import Foreign.C.Types (CLong)
@@ -46,11 +46,11 @@ instance Branchable Double where
 
 instance Vecable a => Branchable (V.Vector a) where
     type HeapType (V.Vector a) = VecPtr a
-    fromB = fmap VS.convert <$> (peek >=> toV)
+    fromB = peek >=> toV
 
 instance Vecable a => Branchable [a] where
     type HeapType [a] = VecPtr a
-    fromB = fmap VS.toList <$> (peek >=> toV)
+    fromB = fmap V.toList . fromB
 
 instance Vecable a => Branchable (ZipList a) where
     type HeapType (ZipList a) = VecPtr a
@@ -59,10 +59,18 @@ instance Vecable a => Branchable (ZipList a) where
 
 newtype VVector a = VVector { fromVVector :: V.Vector (V.Vector a) } deriving Show
 
-instance Vecable a => Branchable (VVector a) where
-    type HeapType (VVector a) = VecPtr (VecPtr a)
-    fromB vvp = do vpp <- readVV vvp
-                   vv <- VS.freeze . VS.MVector (sizeV vvp) =<< newForeignPtr vectorFreeP vpp
+instance VVecable a => Branchable (VVector a) where
+    type HeapType (VVector a) = VVecPtr a
+    fromB vvp = do vpp <- (peek >=> readVV) vvp
+
+                   -- immediately freeze vpp and free it
+                   vv <- VS.freeze . VS.MVector (sizeV vpp)
+                            =<< newForeignPtr_ (dataV vpp)
+
+                   p' <- malloc
+                   poke p' vpp
+                   finalizeForeignPtr =<< newForeignPtr freeV p'
+
                    fmap VVector . mapM toV $ VS.convert vv
 
 
@@ -86,3 +94,6 @@ instance Freeable Double where
 
 instance Vecable a => Freeable (VecPtr a) where
     free' = freeV
+
+instance VVecable a => Freeable (VVecPtr a) where
+    free' = freeVV

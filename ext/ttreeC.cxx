@@ -29,8 +29,8 @@ void ttreeResetBranchAddress(void *vp, const char* bn) {
 }
 
 void ttreeFree(void* vp) {
-    TTree* cp = (TTree*) vp;
-    delete cp;
+    TTree* tp = (TTree*) vp;
+    delete tp;
     return;
 }
 
@@ -40,65 +40,51 @@ vector<T>* castVec(void* vp) {
     return (vector<T>*) vp;
 }
 
-
-unsigned int vectorSizeC(void* vp) {
-    return castVec<char>(vp)->size();
-}
-
-unsigned int vectorSizeI(void* vp) {
-    return castVec<int>(vp)->size();
-}
-
-unsigned int vectorSizeF(void* vp) {
-    return castVec<float>(vp)->size();
-}
-
-unsigned int vectorSizeD(void* vp) {
-    return castVec<double>(vp)->size();
-}
-
-
-char* vectorDataC(void* vp) {
-    return castVec<char>(vp)->data();
-}
-
-int* vectorDataI(void* vp) {
-    return castVec<int>(vp)->data();
-}
-
-float* vectorDataF(void* vp) {
-    return castVec<float>(vp)->data();
-}
-
-double* vectorDataD(void* vp) {
-    return castVec<double>(vp)->data();
+#define VECFUNCS(T,C)                  \
+                                       \
+unsigned int vectorSize##C(void* vp) { \
+    return castVec<T>(vp)->size();     \
+}                                      \
+                                       \
+T* vectorData##C(void* vp) {           \
+    return castVec<T>(vp)->data();     \
+}                                      \
+                                       \
+void vectorFree##C(void** vp) {        \
+    vector<T>** p = (vector<T>**) vp;  \
+    delete *p;                         \
+    delete p;                          \
+    return;                            \
 }
 
 
-void vectorFreeC(void** vp) {
-    vector<char>** p = (vector<char>**) vp;
-    delete *p;
-    delete p;
-    return;
+VECFUNCS(char, C)
+VECFUNCS(int, I)
+VECFUNCS(float, F)
+VECFUNCS(double, D)
+VECFUNCS(void*, P)
+
+
+#define VVECFUNCS(T,C)                                             \
+                                                                   \
+void* vvRead##C(void* vp) {                                        \
+    vector<vector<T> >* vvp = castVec<vector<T> >(vp);             \
+    vector<vector<T>*>* vpp = new vector<vector<T>*>(vvp->size()); \
+                                                                   \
+    for (unsigned int i = 0; i < vvp->size(); i++)                 \
+        (*vpp)[i] = &((*vvp)[i]);                                  \
+                                                                   \
+    return (void*) vpp;                                            \
+}                                                                  \
+                                                                   \
+void vvFree##C(void** vp) {                                        \
+    vector<vector<T> >** p = (vector<vector<T> >**) vp;            \
+    delete *p;                                                     \
+    delete p;                                                      \
+    return;                                                        \
 }
 
-void vectorFreeI(void** vp) {
-    vector<int>** p = (vector<int>**) vp;
-    delete *p;
-    delete p;
-    return;
-}
-
-void vectorFreeF(void** vp) {
-    vector<float>** p = (vector<float>**) vp;
-    delete *p;
-    delete p;
-    return;
-}
-
-void vectorFreeD(void** vp) {
-    vector<double>** p = (vector<double>**) vp;
-    delete *p;
-    delete p;
-    return;
-}
+VVECFUNCS(char, C)
+VVECFUNCS(int, I)
+VVECFUNCS(float, F)
+VVECFUNCS(double, D)

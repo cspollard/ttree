@@ -1,3 +1,12 @@
+#define VECH(T,C)                  \
+unsigned int vectorSize##C(void*); \
+T* vectorData##C(void*);           \
+void vectorFree##C(void**);        \
+
+#define VVECH(T,C)      \
+void* vvRead##C(void*); \
+void vvFree##C(void**); \
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -7,20 +16,17 @@ extern "C" {
     int ttreeGetBranchEntry(void*, const char*, int, void*);
     void ttreeResetBranchAddress(void *, const char*);
 
-    unsigned int vectorSizeC(void* vp);
-    unsigned int vectorSizeI(void* vp);
-    unsigned int vectorSizeF(void* vp);
-    unsigned int vectorSizeD(void* vp);
+    VECH(char, C)
+    VECH(int, I)
+    VECH(float, F)
+    VECH(double, D)
+    VECH(void*, P)
 
-    char*   vectorDataC(void* vp);
-    int*    vectorDataI(void* vp);
-    float*  vectorDataF(void* vp);
-    double* vectorDataD(void* vp);
+    VVECH(char, C)
+    VVECH(int, I)
+    VVECH(float, F)
+    VVECH(double, D)
 
-    void vectorFreeC(void** vp);
-    void vectorFreeI(void** vp);
-    void vectorFreeF(void** vp);
-    void vectorFreeD(void** vp);
 #ifdef __cplusplus
 }
 #endif
