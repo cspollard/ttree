@@ -4,12 +4,14 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE CPP #-}
 
-module Data.TBranch ( Branchable(..), Freeable(..), VVector(..), CInt(..), CChar(..) ) where
+module Data.TBranch ( Branchable(..), Freeable(..), VVector(..)
+                    , CInt(..), CChar(..), CLong(..)
+                    ) where
 
 import Foreign hiding (void)
 
 import Control.Monad ((>=>))
-import Foreign.C.Types (CInt(..), CChar(..))
+import Foreign.C.Types (CInt(..), CChar(..), CLong(..))
 
 import qualified Data.Vector.Storable as VS
 import qualified Data.Vector as V
