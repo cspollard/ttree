@@ -32,6 +32,10 @@ instance Branchable CInt where
     type HeapType CInt = CInt
     fromB = peek
 
+instance Branchable CLong where
+    type HeapType CLong = CLong
+    fromB = peek
+
 instance Branchable Float where
     type HeapType Float = Float
     fromB = peek
@@ -77,6 +81,9 @@ instance Freeable CChar where
     free' = finalizerFree
 
 instance Freeable CInt where
+    free' = finalizerFree
+
+instance Freeable CLong where
     free' = finalizerFree
 
 instance Freeable Float where
