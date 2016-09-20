@@ -4,7 +4,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Data.TTree ( ttree
+module Data.TTree ( ttree, TTree
                   , module Data.TBranch
                   , readBranch
                   , TR, FromTTree(..)
