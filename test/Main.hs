@@ -1,6 +1,7 @@
 module Main where
 
-import Conduit
+import List.Transformer
+
 import System.Environment (getArgs)
 import Control.Monad (forM)
 import Data.Vector (Vector)
@@ -23,5 +24,12 @@ main :: IO ()
 main = do (tn:fns) <- getArgs
           ts <- mapM (ttree tn) fns
 
-          ns <- forM ts $ \t -> project t =$= mapMC (print :: Event -> IO ()) $$ lengthC
-          print (sum ns :: Int)
+          ns <- forM ts $ foldM f (return 0) return . project
+
+          print $ sum ns
+
+    where
+        f :: Int -> Event -> IO Int
+        f i e = do
+            print e
+            return $ i+1

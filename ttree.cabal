@@ -30,10 +30,10 @@ library
   build-depends:       base == 4.9.*
                      , lens == 4.14.*
                      , primitive == 0.6.*
-                     , conduit-combinators == 1.0.*
                      , vector == 0.11.*
                      , unordered-containers == 0.2.*
                      , transformers == 0.5.2.*
+                     , list-transformer == 1.0.*
   hs-source-dirs:      src
   default-language:    Haskell2010
 
@@ -42,7 +42,7 @@ executable ttreeTest
   build-depends:       base == 4.9.*
                      , lens == 4.14.*
                      , vector == 0.11.*
-                     , conduit-combinators == 1.0.*
+                     , list-transformer == 1.0.*
                      , ttree == 0.1.*
   default-language:    Haskell2010
   ghc-options:         -pgmlg++ -Wall -O1

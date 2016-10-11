@@ -1,6 +1,7 @@
 packages:
 - '.'
-extra-deps: []
+extra-deps:
+- list-transformer-1.0.1
 flags: {}
 extra-package-dbs: []
 resolver: lts-7.0

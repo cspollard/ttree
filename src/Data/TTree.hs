@@ -12,8 +12,8 @@ module Data.TTree ( ttree, TTree
                   , MonadIO(..)
                   ) where
 
-
-import Conduit
+import List.Transformer (ListT(..), Step(..), MonadIO(..))
+import qualified List.Transformer as L
 
 import Foreign hiding (void)
 import Foreign.C.String
@@ -70,17 +70,20 @@ class FromTTree a where
     fromTTree :: MonadIO m => TR m a
 
 
-runTTree :: MonadIO m => TR (ConduitM i o m) o -> TTree -> ConduitM i o m ()
-runTTree f c = loop c 0 
-    where loop c' i = do ms <- runMaybeT $ runReaderT f (c', i)
-                         case ms of
-                              Just x  -> yield x >> loop c' (i+1)
-                              Nothing -> return ()
+runTTree :: MonadIO m => TR m o -> TTree -> ListT m o
+runTTree f c = loop c 0
+    where
+        loop c' i = ListT $
+            do
+                ms <- runMaybeT $ runReaderT f (c', i)
+                case ms of
+                    Nothing -> return Nil
+                    Just x  -> return . Cons x $ loop c' (i+1)
 
 
-runTTreeN :: MonadIO m => Int -> TR (ConduitM i o m) o -> TTree -> ConduitM i o m ()
-runTTreeN n f c = runTTree f c =$= takeC n
+runTTreeN :: MonadIO m => Int -> TR m o -> TTree -> ListT m o
+runTTreeN n f c = L.take n $ runTTree f c
 
 
-project :: (MonadIO m, FromTTree fc) => TTree -> ConduitM i fc m ()
+project :: (MonadIO m, FromTTree fc) => TTree -> ListT m fc
 project = runTTree fromTTree
