@@ -21,9 +21,9 @@ int ttreeGetBranchEntry(void* vp, const char* bn, int i, void* bp) {
     return b->GetEntry(i);
 }
 
-int ttreeLoadTree(void* vp, int i) {
+long ttreeLoadTree(void* vp, int i) {
     TTree* tp = (TTree*) vp;
-    int n = tp->LoadTree(i);
+    long n = tp->LoadTree(i);
     if (n >= 0)
         tp->GetEntry(i);
     return n;

@@ -12,8 +12,6 @@ module Data.TTree ( ttree, TTree
                   , MonadIO(..)
                   ) where
 
-import Debug.Trace
-
 import List.Transformer (ListT(..), Step(..), MonadIO(..))
 import qualified List.Transformer as L
 
@@ -36,7 +34,7 @@ type FVPtr = ForeignPtr ()
 foreign import ccall "ttreeC.h ttree" _ttree
     :: CString -> CString -> IO VPtr
 foreign import ccall "ttreeC.h ttreeLoadTree" _ttreeLoadTree
-    :: VPtr -> Int -> IO Int
+    :: VPtr -> Int -> IO CLong
 foreign import ccall "ttreeC.h ttreeGetBranchEntry" _ttreeGetBranchEntry
     :: VPtr -> CString -> Int -> Ptr a -> IO Int
 foreign import ccall "ttreeC.h &ttreeFree" _ttreeFree
@@ -73,7 +71,7 @@ readBranch s = do
 
         -- this is the first time we've accessed this branch: alloc a
         -- new pointer
-        Nothing -> traceShow ("first time accessing " ++ s) $ do
+        Nothing -> do
             p <- liftIO $ newForeignPtr free' =<< calloc
             put $ t { ttreeBranches = M.insert s (castForeignPtr p) (ttreeBranches t) }
             n <- liftIO $ withCString s
