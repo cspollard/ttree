@@ -14,7 +14,7 @@ extern "C" {
 
     void ttreeFree(void*);
     int ttreeGetBranchEntry(void*, const char*, int, void*);
-    void ttreeResetBranchAddress(void *, const char*);
+    int ttreeLoadTree(void*, int);
 
     VECH(char, C)
     VECH(int, I)

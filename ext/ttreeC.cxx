@@ -21,11 +21,12 @@ int ttreeGetBranchEntry(void* vp, const char* bn, int i, void* bp) {
     return b->GetEntry(i);
 }
 
-void ttreeResetBranchAddress(void *vp, const char* bn) {
+int ttreeLoadTree(void* vp, int i) {
     TTree* tp = (TTree*) vp;
-    TBranch *b = tp->GetBranch(bn);
-    b->ResetAddress();
-    return;
+    int n = tp->LoadTree(i);
+    if (n >= 0)
+        tp->GetEntry(i);
+    return n;
 }
 
 void ttreeFree(void* vp) {
