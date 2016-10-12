@@ -13,8 +13,9 @@ import Foreign hiding (void)
 import Control.Monad ((>=>))
 import Foreign.C.Types (CInt(..), CChar(..), CLong(..))
 
+import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as VS
-import qualified Data.Vector as V
+import qualified Data.Vector.Generic as G
 
 import Control.Applicative (ZipList(..))
 
@@ -46,20 +47,20 @@ instance Branchable Double where
     type HeapType Double = Double
     fromB = peek
 
-instance Vecable a => Branchable (V.Vector a) where
-    type HeapType (V.Vector a) = VecPtr a
+instance Vecable a => Branchable (Vector a) where
+    type HeapType (Vector a) = VecPtr a
     fromB = peek >=> toV
 
 instance Vecable a => Branchable [a] where
     type HeapType [a] = VecPtr a
-    fromB = fmap V.toList . fromB
+    fromB = fmap VS.toList . fromB
 
 instance Vecable a => Branchable (ZipList a) where
     type HeapType (ZipList a) = VecPtr a
     fromB = fmap ZipList <$> fromB
 
 
-newtype VVector a = VVector { fromVVector :: V.Vector (V.Vector a) } deriving Show
+newtype VVector a = VVector { fromVVector :: [Vector a] }
 
 instance VVecable a => Branchable (VVector a) where
     type HeapType (VVector a) = VVecPtr a
@@ -73,7 +74,7 @@ instance VVecable a => Branchable (VVector a) where
                    poke p' vpp
                    finalizeForeignPtr =<< newForeignPtr freeV p'
 
-                   fmap VVector . mapM toV $ VS.convert vv
+                   fmap VVector . VS.mapM toV $ vv
 
 
 class Freeable a where

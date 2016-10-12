@@ -10,8 +10,8 @@ module Data.STLVec where
 
 import Foreign hiding (void)
 
+import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as VS
-import qualified Data.Vector as V
 import Foreign.C.Types (CInt(..), CChar(..))
 
 foreign import ccall "ttreeC.h vectorSizeC" vectorSizeC
@@ -79,13 +79,14 @@ castVecPtr (VecPtr p) = VecPtr p
 
 newtype VPtr = VPtr { vptr :: Ptr () } deriving (Show, Storable)
 
-class (Show a, Storable a) => Vecable a where
+
+class Storable a => Vecable a where
     sizeV :: VecPtr a -> CInt
     dataV :: VecPtr a -> Ptr a
     freeV :: FunPtr (Ptr (VecPtr a) -> IO ())
 
-    toV :: VecPtr a -> IO (V.Vector a)
-    toV vp = fmap VS.convert . VS.freeze . VS.MVector (fromEnum $ sizeV vp) =<< newForeignPtr_ (dataV vp)
+    toV :: VecPtr a -> IO (Vector a)
+    toV vp = VS.freeze . VS.MVector (fromEnum $ sizeV vp) =<< newForeignPtr_ (dataV vp)
 
 
 instance Vecable CChar where
