@@ -9,6 +9,9 @@ using namespace std;
 void* ttree(const char* tn, const char* fn) {
     TFile* f = TFile::Open(fn);
     TTree* tp = (TTree*) f->Get(tn);
+    if (!tp)
+        return NULL;
+
     tp->SetBranchStatus("*", false);
     return (void*) tp;
 }

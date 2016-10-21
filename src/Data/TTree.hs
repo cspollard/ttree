@@ -4,7 +4,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Data.TTree ( ttree, TTree
+module Data.TTree ( ttree, TTree, isNullTree
                   , module Data.TBranch
                   , readBranch
                   , TR, FromTTree(..)
@@ -54,6 +54,8 @@ ttree tn fn = do tn' <- newCString tn
                  free tn' >> free fn'
                  return $ TTree tp M.empty
 
+isNullTree :: TTree -> IO Bool
+isNullTree (TTree p _) = withForeignPtr p (return . (== nullPtr))
 
 type TR m a = RWST Int () TTree (MaybeT m) a
 
