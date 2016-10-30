@@ -8,7 +8,7 @@ module Data.TTree ( ttree, TTree, isNullTree
                   , module Data.TBranch
                   , readBranch
                   , TR, FromTTree(..)
-                  , runTTree, runTTreeN, project
+                  , runTTree, runTTreeL, runTTreeLN, project
                   , MonadIO(..)
                   ) where
 
@@ -19,7 +19,7 @@ import Foreign hiding (void)
 import Foreign.C.String
 
 import Control.Monad.Trans.RWS.Strict
-import Control.Monad.Trans.Maybe
+import Control.Monad.Trans.Except
 
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
@@ -57,7 +57,7 @@ ttree tn fn = do tn' <- newCString tn
 isNullTree :: TTree -> IO Bool
 isNullTree (TTree p _) = withForeignPtr p (return . (== nullPtr))
 
-type TR m a = RWST Int () TTree (MaybeT m) a
+type TR m a = RWST Int () TTree (ExceptT String m) a
 
 -- note: this assumes that once a branch has been requested
 -- that we want to load it for *EVERY EVENT*
@@ -90,23 +90,38 @@ class FromTTree a where
     fromTTree :: MonadIO m => TR m a
 
 
-runTTree :: MonadIO m => TR m o -> TTree -> ListT m o
+runTTree :: MonadIO m => (o -> TR m o) -> TTree -> o -> m o
 runTTree f c = loop c 0
+    where
+        loop c' i o = do
+            n <- liftIO $ withForeignPtr (ttreePtr c') $ flip _ttreeLoadTree i
+            if n < 0
+                then return o
+                else do
+                    ms <- runExceptT $ runRWST (f o) i c'
+                    case ms of
+                        Left s -> error s
+                        Right (x, c'', _) -> loop c'' (i+1) x
+
+
+-- TODO
+-- I think the following could be written in terms of the previous.
+runTTreeL :: MonadIO m => TR m o -> TTree -> ListT m o
+runTTreeL f c = loop c 0
     where
         loop c' i = ListT $ do
             n <- liftIO $ withForeignPtr (ttreePtr c') $ flip _ttreeLoadTree i
             if n < 0
                 then return Nil
                 else do
-                    ms <- runMaybeT $ runRWST f i c'
+                    ms <- runExceptT $ runRWST f i c'
                     case ms of
-                        Nothing -> return Nil
-                        Just (x, c'', _) -> return . Cons x $ loop c'' (i+1)
+                        Left s -> error s
+                        Right (x, c'', _) -> return . Cons x $ loop c'' (i+1)
 
 
-runTTreeN :: MonadIO m => Int -> TR m o -> TTree -> ListT m o
-runTTreeN n f c = L.take n $ runTTree f c
-
+runTTreeLN :: MonadIO m => Int -> TR m o -> TTree -> ListT m o
+runTTreeLN n f c = L.take n $ runTTreeL f c
 
 project :: (MonadIO m, FromTTree fc) => TTree -> ListT m fc
-project = runTTree fromTTree
+project = runTTreeL fromTTree
