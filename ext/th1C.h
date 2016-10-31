@@ -5,6 +5,7 @@ double binedge##C(void*, unsigned int);  \
 T entry##C(void*, unsigned int);         \
 T uncert##C(void*, unsigned int);        \
 
+
 #ifdef __cplusplus
 extern "C" {
 #endif

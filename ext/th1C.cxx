@@ -1,10 +1,8 @@
-#include "ttreeC.h"
+#include "th1C.h"
 #include "TFile.h"
 #include "TH1.h"
-#include <vector>
 
 using namespace std;
-
 
 #define TH1(T,C)                                \
 void* th1##C(const char* hn, const char* fn) {  \

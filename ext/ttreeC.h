@@ -7,6 +7,7 @@ void vectorFree##C(void**);        \
 void* vvRead##C(void*); \
 void vvFree##C(void**); \
 
+
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -25,7 +25,7 @@ library
   include-dirs:        ext/
   c-sources:           ext/ttreeC.cxx ext/th1C.cxx
   cc-options:          -std=c++11 -m64
-  extra-libraries:     stdc++ m dl Core RIO Tree
+  extra-libraries:     stdc++ m dl Core RIO Tree Hist
   ghc-options:         -pgmlg++ -Wall -O1
   ghc-prof-options:    -pgmlg++ -Wall -O0 -caf-all
   build-depends:       base == 4.9.*
