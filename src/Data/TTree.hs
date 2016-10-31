@@ -90,10 +90,10 @@ class FromTTree a where
     fromTTree :: MonadIO m => TR m a
 
 
-runTTree :: MonadIO m => (o -> TR m o) -> TTree -> o -> m o
-runTTree f c = loop c 0
+runTTree :: MonadIO m => (o -> TR m o) -> o -> TTree -> m o
+runTTree f o c = loop o c 0
     where
-        loop c' i o = do
+        loop o c' i = do
             n <- liftIO $ withForeignPtr (ttreePtr c') $ flip _ttreeLoadTree i
             if n < 0
                 then return o
@@ -101,7 +101,7 @@ runTTree f c = loop c 0
                     ms <- runExceptT $ runRWST (f o) i c'
                     case ms of
                         Left s -> error s
-                        Right (x, c'', _) -> loop c'' (i+1) x
+                        Right (x, c'', _) -> loop x c'' (i+1)
 
 
 -- TODO
