@@ -19,10 +19,11 @@ library
   exposed-modules:     Data.TTree
                      , Data.TBranch
                      , Data.STLVec
+                     , Data.TH1
   -- other-modules:       
   -- other-extensions:    
   include-dirs:        ext/
-  c-sources:           ext/ttreeC.cxx
+  c-sources:           ext/ttreeC.cxx ext/th1C.cxx
   cc-options:          -std=c++11 -m64
   extra-libraries:     stdc++ m dl Core RIO Tree
   ghc-options:         -pgmlg++ -Wall -O1
@@ -32,7 +33,6 @@ library
                      , primitive == 0.6.*
                      , vector == 0.11.*
                      , containers == 0.5.*
-                     -- , unordered-containers == 0.2.*
                      , transformers == 0.5.2.*
                      , list-transformer == 1.0.*
   hs-source-dirs:      src
