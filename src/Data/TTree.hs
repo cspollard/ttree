@@ -20,6 +20,7 @@ import Foreign.C.String
 
 import Control.Monad.Trans.RWS.Strict
 import Control.Monad.Trans.Except
+import Control.Monad.Trans.Class (lift)
 
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
@@ -79,7 +80,7 @@ readBranch s = do
                 $ \p' -> _ttreeGetBranchEntry tp' s' i p'
 
             if n <= 0
-               then fail $ "failed to read branch " ++ s
+               then lift . throwE $ "failed to read branch " ++ s
                else liftIO $ withForeignPtr p fromB
 
 
