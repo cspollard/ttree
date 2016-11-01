@@ -16,14 +16,15 @@ build-type:          Configure
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Data.TTree
+  exposed-modules:     Data.STLVec
                      , Data.TBranch
-                     , Data.STLVec
+                     , Data.TFile
                      , Data.TH1
+                     , Data.TTree
   -- other-modules:       
   -- other-extensions:    
   include-dirs:        ext/
-  c-sources:           ext/ttreeC.cxx ext/th1C.cxx
+  c-sources:           ext/ttreeC.cxx ext/th1C.cxx ext/tfileC.cxx
   cc-options:          -std=c++11 -m64
   extra-libraries:     stdc++ m dl Core RIO Tree Hist
   ghc-options:         -pgmlg++ -Wall -O1

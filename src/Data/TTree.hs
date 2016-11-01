@@ -25,6 +25,7 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
 
 import Data.TBranch
+import Data.TFile
 
 
 -- void pointer
@@ -32,13 +33,11 @@ type VPtr = Ptr ()
 type FVPtr = ForeignPtr ()
 
 foreign import ccall "ttreeC.h ttree" _ttree
-    :: CString -> CString -> IO VPtr
+    :: TFile -> CString -> IO VPtr
 foreign import ccall "ttreeC.h ttreeLoadTree" _ttreeLoadTree
     :: VPtr -> Int -> IO CLong
 foreign import ccall "ttreeC.h ttreeGetBranchEntry" _ttreeGetBranchEntry
     :: VPtr -> CString -> Int -> Ptr a -> IO Int
-foreign import ccall "ttreeC.h &ttreeFree" _ttreeFree
-    :: FunPtr (Ptr a -> IO ())
 
 
 data TTree =
@@ -47,12 +46,10 @@ data TTree =
         , ttreeBranches :: Map String FVPtr
         }
 
-ttree :: String -> String -> IO TTree
-ttree tn fn = do tn' <- newCString tn
-                 fn' <- newCString fn
-                 tp <- newForeignPtr _ttreeFree =<< _ttree tn' fn'
-                 free tn' >> free fn'
-                 return $ TTree tp M.empty
+ttree :: TFile -> String -> IO TTree
+ttree f tn = do
+    tp <- newForeignPtr_ =<< withCString tn (_ttree f)
+    return $ TTree tp M.empty
 
 isNullTree :: TTree -> IO Bool
 isNullTree (TTree p _) = withForeignPtr p (return . (== nullPtr))

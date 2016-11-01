@@ -7,6 +7,7 @@ import Control.Monad (forM)
 import Data.Vector (Vector)
 
 import Data.TTree
+import Data.TFile
 
 data Event = Event CInt CInt Float (Vector Float) (Vector Float) (Vector Float) (VVector Double) (VVector CInt) deriving Show
 
@@ -21,15 +22,19 @@ instance FromTTree Event where
                       <*> readBranch "JetTracksisTight"
 
 main :: IO ()
-main = do (tn:fns) <- getArgs
-          ts <- mapM (ttree tn) fns
+main = do
+    (tn:fns) <- getArgs
+    ns <- forM fns $ \fn -> do
+            f <- tfileOpen fn
+            t <- ttree f tn
+            n <- foldM perEvent (return 0) return . project $ t
+            tfileClose f
+            return n
 
-          ns <- forM ts $ foldM f (return 0) return . project
-
-          print $ sum ns
+    print $ sum ns
 
     where
-        f :: Int -> Event -> IO Int
-        f i e = do
+        perEvent :: Int -> Event -> IO Int
+        perEvent i e = do
             print e
             return $ i+1

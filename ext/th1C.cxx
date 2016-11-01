@@ -5,11 +5,6 @@
 using namespace std;
 
 #define TH1(T,C)                                \
-void* th1##C(const char* hn, const char* fn) {  \
-    TFile* f = TFile::Open(fn);                 \
-    TH1##C* hp = (TH1##C *) f->Get(hn);         \
-    return (void*) hp;                          \
-}                                               \
                                                 \
 unsigned int nbins##C(void* vp) {               \
     return ((TH1##C *) vp)->GetNbinsX();        \

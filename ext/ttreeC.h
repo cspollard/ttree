@@ -11,9 +11,8 @@ void vvFree##C(void**); \
 #ifdef __cplusplus
 extern "C" {
 #endif
-    void* ttree(const char*, const char*);
+    void* ttree(void*, const char*);
 
-    void ttreeFree(void*);
     int ttreeGetBranchEntry(void*, const char*, int, void*);
     long ttreeLoadTree(void*, int);
 

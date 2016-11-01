@@ -6,9 +6,8 @@
 
 using namespace std;
 
-void* ttree(const char* tn, const char* fn) {
-    TFile* f = TFile::Open(fn);
-    TTree* tp = (TTree*) f->Get(tn);
+void* ttree(void* fp, const char* tn) {
+    TTree* tp = (TTree*) ((TFile*) fp)->Get(tn);
     if (!tp)
         return NULL;
 
