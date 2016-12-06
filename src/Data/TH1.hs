@@ -23,6 +23,6 @@ foreign import ccall "th1C.h nbinsF" nbinsf
 foreign import ccall "th1C.h binedgeF" binedgef
     :: TH1F -> CUInt -> IO Double
 foreign import ccall "th1C.h entryF" entryf
-    :: TH1F -> CUInt -> IO Double
+    :: TH1F -> CUInt -> IO Float
 foreign import ccall "th1C.h uncertF" uncertf
-    :: TH1F -> CUInt -> IO Double
+    :: TH1F -> CUInt -> IO Float
