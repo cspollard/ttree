@@ -1,32 +1,34 @@
-{-# LANGUAGE ForeignFunctionInterface #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE ForeignFunctionInterface  #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE TupleSections             #-}
+{-# LANGUAGE TypeFamilies              #-}
 
 module Data.TTree ( ttree, TTree, isNullTree
                   , module Data.TBranch
                   , readBranch
                   , TR, FromTTree(..)
-                  , runTTree, runTTreeL, runTTreeLN, project
+                  , runTTree, runTTreeL, runTTreeLDebug, runTTreeLN, project
                   , MonadIO(..)
                   ) where
 
-import List.Transformer (ListT(..), Step(..), MonadIO(..))
-import qualified List.Transformer as L
+import           Control.Monad.Trans.Class      (lift)
+import           Control.Monad.Trans.Except
+import           Control.Monad.Trans.RWS.Strict
+import           Control.Monad.Trans.Writer     (WriterT (..))
+import           Data.Map.Strict                (Map)
+import qualified Data.Map.Strict                as M
+import qualified Data.Text                      as T
+import           Foreign                        hiding (void)
+import           Foreign.C.String
+import           List.Transformer               (ListT (..), MonadIO (..),
+                                                 Step (..))
+import qualified List.Transformer               as L
 
-import Foreign hiding (void)
-import Foreign.C.String
-
-import Control.Monad.Trans.RWS.Strict
-import Control.Monad.Trans.Except
-import Control.Monad.Trans.Class (lift)
-
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as M
-
-import Data.TBranch
-import Data.TFile
+import           Data.TBranch
+import           Data.TFile
 
 
 -- void pointer
@@ -43,7 +45,7 @@ foreign import ccall "ttreeC.h ttreeGetBranchEntry" _ttreeGetBranchEntry
 
 data TTree =
     TTree
-        { ttreePtr :: FVPtr
+        { ttreePtr      :: FVPtr
         , ttreeBranches :: Map String FVPtr
         }
 
@@ -55,7 +57,7 @@ ttree f tn = do
 isNullTree :: TTree -> IO Bool
 isNullTree (TTree p _) = withForeignPtr p (return . (== nullPtr))
 
-type TR m a = RWST Int () TTree (ExceptT String m) a
+type TR m a = RWST Int [T.Text] TTree (ExceptT String m) a
 
 -- note: this assumes that once a branch has been requested
 -- that we want to load it for *EVERY EVENT*
@@ -64,6 +66,7 @@ readBranch :: (MonadIO m, Branchable a, Storable (HeapType a), Freeable (HeapTyp
 readBranch s = do
     t <- get
     i <- ask
+    tell [T.pack s]
     case s `M.lookup` ttreeBranches t of
         -- we've already read this branch at least once: don't alloc a
         -- new pointer
@@ -96,26 +99,49 @@ runTTree f o c = loop o c 0
             if n < 0
                 then return o'
                 else do
-                    ms <- runExceptT $ runRWST (f o') i c'
-                    case ms of
-                        Left s -> error s
-                        Right (x, c'', _) -> loop x c'' (i+1)
+                  ms <- runExceptT $ runRWST (f o') i c'
+                  case ms of
+                    Left s            -> error s
+                    Right (x, c'', _) -> loop x c'' (i+1)
 
 
 -- TODO
 -- I think the following could be written in terms of the previous.
+runTTreeLWithLog :: MonadIO m => TR m o -> TTree -> ListT (WriterT [T.Text] m) o
+runTTreeLWithLog f c = loop c 0
+  where
+    loop c' i = ListT . WriterT $ do
+      n <- liftIO $ withForeignPtr (ttreePtr c') $ flip _ttreeLoadTree i
+      if n < 0
+        then return (Nil, mempty)
+        else do
+          ms <- runExceptT $ runRWST f i c'
+          case ms of
+            Left s            -> error s
+            Right (x, c'', s) -> return . (,s) .  Cons x $ loop c'' (i+1)
+
+
+dropWriter :: Monad m => ListT (WriterT x m) o -> ListT m o
+dropWriter l = ListT $ do
+  x <- fmap fst . runWriterT $ next l
+  case x of
+    Cons y l' -> return . Cons y $ dropWriter l'
+    Nil       -> return Nil
+
+printWriter :: (MonadIO m, Show s) => ListT (WriterT [s] m) o -> ListT m o
+printWriter l = ListT $ do
+  (x, s) <- runWriterT $ next l
+  liftIO $ putStrLn "branch reads:"
+  liftIO $ traverse print s
+  case x of
+    Cons y l' -> return . Cons y $ printWriter l'
+    Nil       -> return Nil
+
+runTTreeLDebug :: MonadIO m => TR m o -> TTree -> ListT m o
+runTTreeLDebug f t = printWriter $ runTTreeLWithLog f t
+
 runTTreeL :: MonadIO m => TR m o -> TTree -> ListT m o
-runTTreeL f c = loop c 0
-    where
-        loop c' i = ListT $ do
-            n <- liftIO $ withForeignPtr (ttreePtr c') $ flip _ttreeLoadTree i
-            if n < 0
-                then return Nil
-                else do
-                    ms <- runExceptT $ runRWST f i c'
-                    case ms of
-                        Left s -> error s
-                        Right (x, c'', _) -> return . Cons x $ loop c'' (i+1)
+runTTreeL f t = dropWriter $ runTTreeLWithLog f t
 
 
 runTTreeLN :: MonadIO m => Int -> TR m o -> TTree -> ListT m o
