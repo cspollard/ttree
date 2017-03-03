@@ -41,6 +41,8 @@ foreign import ccall "ttreeC.h ttreeLoadTree" _ttreeLoadTree
     :: VPtr -> Int -> IO CLong
 foreign import ccall "ttreeC.h ttreeGetBranchEntry" _ttreeGetBranchEntry
     :: VPtr -> CString -> Int -> Ptr a -> IO Int
+foreign import ccall "ttreeC.h &ttreeFree" _ttreeFree
+    :: FunPtr (Ptr () -> IO ())
 
 
 data TTree =
@@ -57,7 +59,7 @@ ttree f tn = do
 isNullTree :: TTree -> IO Bool
 isNullTree (TTree p _) = withForeignPtr p (return . (== nullPtr))
 
-type TR m a = RWST Int [T.Text] TTree (ExceptT String m) a
+type TR m = RWST Int [T.Text] TTree (ExceptT String m)
 
 -- note: this assumes that once a branch has been requested
 -- that we want to load it for *EVERY EVENT*
@@ -82,9 +84,9 @@ readBranch s = do
                 $ \tp' -> withForeignPtr p
                 $ \p' -> _ttreeGetBranchEntry tp' s' i p'
 
-            if n <= 0
-               then lift . throwE $ "failed to read branch " ++ s
-               else liftIO $ withForeignPtr p fromB
+            if n > 0
+               then liftIO $ withForeignPtr p fromB
+               else lift . throwE $ "failed to read branch " ++ s
 
 
 class FromTTree a where

@@ -1,25 +1,22 @@
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE CPP                       #-}
+{-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE TypeFamilies              #-}
 
-module Data.TBranch ( Branchable(..), Freeable(..), VVector(..)
-                    , CInt(..), CChar(..), CLong(..)
-                    ) where
+module Data.TBranch
+  ( Branchable(..), Freeable(..), VVector(..)
+  , CInt(..), CChar(..), CLong(..)
+  ) where
 
-import Foreign hiding (void)
-
-import Control.Monad ((>=>))
-import Foreign.C.Types (CInt(..), CChar(..), CLong(..))
-
+import           Control.Applicative  (ZipList (..))
+import           Control.Monad        ((>=>))
+import qualified Data.Vector          as V
 import qualified Data.Vector.Storable as VS
-import qualified Data.Vector as V
+import           Foreign              hiding (void)
+import           Foreign.C.Types      (CChar (..), CInt (..), CLong (..))
 
-import Control.Applicative (ZipList(..))
-
-
-import Data.STLVec
+import           Data.STLVec
 
 class Branchable b where
     type HeapType b :: *
@@ -56,24 +53,25 @@ instance Vecable a => Branchable [a] where
 
 instance Vecable a => Branchable (ZipList a) where
     type HeapType (ZipList a) = VecPtr a
-    fromB = fmap ZipList <$> fromB
+    fromB = fmap ZipList . fromB
 
 
 newtype VVector a = VVector { fromVVector :: V.Vector (V.Vector a) } deriving Show
 
 instance VVecable a => Branchable (VVector a) where
     type HeapType (VVector a) = VVecPtr a
-    fromB vvp = do vpp <- (peek >=> readVV) vvp
+    fromB vvp = do
+      vpp <- (peek >=> readVV) vvp
 
-                   -- immediately freeze vpp and free it
-                   vv <- VS.freeze . VS.MVector (fromEnum $ sizeV vpp)
-                            =<< newForeignPtr_ (dataV vpp)
+      -- immediately freeze vpp and free it
+      vv <- VS.freeze . VS.MVector (fromEnum $ sizeV vpp)
+              =<< newForeignPtr_ (dataV vpp)
 
-                   p' <- malloc
-                   poke p' vpp
-                   finalizeForeignPtr =<< newForeignPtr freeV p'
+      p' <- malloc
+      poke p' vpp
+      finalizeForeignPtr =<< newForeignPtr freeV p'
 
-                   fmap VVector . mapM (fmap VS.convert . toV) $ VS.convert vv
+      fmap VVector . mapM (fmap VS.convert . toV) $ VS.convert vv
 
 
 class Freeable a where
