@@ -79,7 +79,9 @@ readBranch s = do
         Nothing -> do
             p <- liftIO $ newForeignPtr free' =<< calloc
             put $ t { ttreeBranches = M.insert s (castForeignPtr p) (ttreeBranches t) }
-            n <- liftIO $ withCString s
+            n <-
+              liftIO
+                $ withCString s
                 $ \s' -> withForeignPtr (ttreePtr t)
                 $ \tp' -> withForeignPtr p
                 $ \p' -> _ttreeGetBranchEntry tp' s' i p'

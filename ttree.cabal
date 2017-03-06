@@ -30,7 +30,7 @@ library
   ghc-options:         -pgmlg++ -Wall -O1
   ghc-prof-options:    -pgmlg++ -Wall -O0 -caf-all
   build-depends:       base == 4.9.*
-                     , lens == 4.14.*
+                     , lens == 4.15.*
                      , primitive == 0.6.*
                      , vector == 0.11.*
                      , containers == 0.5.*
@@ -43,7 +43,7 @@ library
 executable ttreeTest
   main-is:             test/Main.hs
   build-depends:       base == 4.9.*
-                     , lens == 4.14.*
+                     , lens == 4.15.*
                      , vector == 0.11.*
                      , list-transformer == 1.0.*
                      , transformers == 0.5.*
