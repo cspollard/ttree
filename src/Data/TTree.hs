@@ -77,7 +77,7 @@ readBranch s = do
         -- this is the first time we've accessed this branch: alloc a
         -- new pointer
         Nothing -> do
-            p <- liftIO $ newForeignPtr free' =<< calloc
+            p <- liftIO $ newForeignPtr_ =<< calloc
             put $ t { ttreeBranches = M.insert s (castForeignPtr p) (ttreeBranches t) }
             n <-
               liftIO
