@@ -2,9 +2,8 @@
 
 module Data.TFile where
 
-import Foreign hiding (void)
-
-import Foreign.C.String
+import           Foreign          hiding (void)
+import           Foreign.C.String
 
 newtype TFile = TFile (Ptr ())
 

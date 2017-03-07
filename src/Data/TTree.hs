@@ -6,13 +6,14 @@
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE TypeFamilies              #-}
 
-module Data.TTree ( ttree, TTree, isNullTree
-                  , module Data.TBranch
-                  , readBranch
-                  , TR, FromTTree(..)
-                  , runTTree, runTTreeL, runTTreeLDebug, runTTreeLN, project
-                  , MonadIO(..)
-                  ) where
+module Data.TTree
+  ( ttree, TTree, isNullTree
+  , module Data.TBranch
+  , readBranch
+  , TR, FromTTree(..)
+  , runTTree, runTTreeL, runTTreeLDebug, runTTreeLN, project
+  , MonadIO(..)
+  ) where
 
 import           Control.Monad.Trans.Class      (lift)
 import           Control.Monad.Trans.Except
