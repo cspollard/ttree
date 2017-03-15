@@ -9,7 +9,7 @@
 module Data.TTree
   ( ttree, TTree, isNullTree
   , module Data.TBranch
-  , readBranch
+  , readBranch, readBranchMaybe
   , TR, FromTTree(..)
   , runTTree, runTTreeL, runTTreeLDebug, runTTreeLN, project
   , MonadIO(..)
@@ -64,16 +64,16 @@ type TR m = RWST Int [T.Text] TTree (ExceptT String m)
 
 -- note: this assumes that once a branch has been requested
 -- that we want to load it for *EVERY EVENT*
-readBranch :: (MonadIO m, Branchable a, Storable (HeapType a), Freeable (HeapType a))
-           => String -> TR m a
-readBranch s = do
+readBranchMaybe :: (MonadIO m, Branchable a, Storable (HeapType a), Freeable (HeapType a))
+           => String -> TR m (Maybe a)
+readBranchMaybe s = do
     t <- get
     i <- ask
     tell [T.pack s]
     case s `M.lookup` ttreeBranches t of
         -- we've already read this branch at least once: don't alloc a
         -- new pointer
-        Just p  -> liftIO $ withForeignPtr (castForeignPtr p) fromB
+        Just p  -> fmap Just . liftIO $ withForeignPtr (castForeignPtr p) fromB
 
         -- this is the first time we've accessed this branch: alloc a
         -- new pointer
@@ -88,8 +88,18 @@ readBranch s = do
                 $ \p' -> _ttreeGetBranchEntry tp' s' i p'
 
             if n > 0
-               then liftIO $ withForeignPtr p fromB
-               else lift . throwE $ "failed to read branch " ++ s
+               then fmap Just . liftIO $ withForeignPtr p fromB
+               else return Nothing
+
+-- fail if the branch doesn't exist or is unreadable.
+readBranch
+  :: (MonadIO m, Branchable a, Storable (HeapType a), Freeable (HeapType a))
+  => String -> TR m a
+readBranch s = do
+  m <- readBranchMaybe s
+  case m of
+    Nothing -> lift . throwE $ "failed to read branch " ++ s
+    Just x  -> return x
 
 
 class FromTTree a where
@@ -98,16 +108,16 @@ class FromTTree a where
 
 runTTree :: MonadIO m => (o -> TR m o) -> o -> TTree -> m o
 runTTree f o c = loop o c 0
-    where
-        loop o' c' i = do
-            n <- liftIO $ withForeignPtr (ttreePtr c') $ flip _ttreeLoadTree i
-            if n < 0
-                then return o'
-                else do
-                  ms <- runExceptT $ runRWST (f o') i c'
-                  case ms of
-                    Left s            -> error s
-                    Right (x, c'', _) -> loop x c'' (i+1)
+  where
+    loop o' c' i = do
+      n <- liftIO $ withForeignPtr (ttreePtr c') $ flip _ttreeLoadTree i
+      if n < 0
+        then return o'
+        else do
+          ms <- runExceptT $ runRWST (f o') i c'
+          case ms of
+            Left s            -> error s
+            Right (x, c'', _) -> loop x c'' (i+1)
 
 
 -- TODO
@@ -137,7 +147,7 @@ printWriter :: (MonadIO m, Show s) => ListT (WriterT [s] m) o -> ListT m o
 printWriter l = ListT $ do
   (x, s) <- runWriterT $ next l
   liftIO $ putStrLn "branch reads:"
-  liftIO $ traverse print s
+  _ <- liftIO $ traverse print s
   case x of
     Cons y l' -> return . Cons y $ printWriter l'
     Nil       -> return Nil
