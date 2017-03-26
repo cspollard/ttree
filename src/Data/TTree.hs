@@ -16,17 +16,15 @@ module Data.TTree
   ) where
 
 import           Control.Monad.Except
-import           Control.Monad.State
-import           Control.Monad.Trans  (lift)
-import           Control.Monad.Writer
-import           Data.Bifunctor       (first, second)
-import           Data.Map.Strict      (Map)
-import qualified Data.Map.Strict      as M
-import qualified Data.Text            as T
-import           Foreign              hiding (void)
+import           Control.Monad.State.Strict
+import           Control.Monad.Trans        (lift)
+import           Data.Bifunctor             (first, second)
+import           Data.Map.Strict            (Map)
+import qualified Data.Map.Strict            as M
+import           Foreign                    hiding (void)
 import           Foreign.C.String
 import           Pipes
-import qualified Pipes.Prelude        as P
+import qualified Pipes.Prelude              as P
 
 import           Data.TBranch
 import           Data.TFile
@@ -60,10 +58,9 @@ ttree f tn = do
 isNullTree :: TTree -> IO Bool
 isNullTree (TTree p _) = withForeignPtr p (return . (== nullPtr))
 
-type TR m = StateT (TTree, Int) (WriterT [T.Text] (ExceptT TreeError m))
-data TreeError =
-  BranchError
-  | EndOfTree
+type TR m = StateT (TTree, Int) (ExceptT TreeError m)
+
+data TreeError = BranchError | EndOfTree
   deriving Show
 
 -- note: this assumes that once a branch has been requested
@@ -73,7 +70,6 @@ readBranchMaybe
   => String -> TR m (Maybe a)
 readBranchMaybe s = do
   (t, i) <- get
-  tell [T.pack s]
   case s `M.lookup` ttreeBranches t of
     -- we've already read this branch at least once: don't alloc a
     -- new pointer
@@ -121,17 +117,17 @@ loadTree f = do
     else f
 
 runTR :: Monad m => TTree -> TR m a -> m (Either TreeError a)
-runTR t = runExceptT . fmap fst . runWriterT . flip evalStateT (t, 0)
+runTR t = runExceptT . flip evalStateT (t, 0)
 
 pipeTTree :: MonadIO m => TR m a -> Pipe Int a (TR m) ()
-pipeTTree f = catchError go ce
+pipeTTree f = go
   where
     go =
       let f' = loadTree f
       in do
         i <- await
         modify (second $ const i)
-        yield =<< lift f'
+        flip catchError ce $ yield =<< lift f'
         go
 
     ce EndOfTree = void (liftIO (putStrLn "end of tree"))
@@ -140,7 +136,7 @@ pipeTTree f = catchError go ce
 
 produceTTree :: MonadIO m => TR m a -> Producer a (TR m) ()
 produceTTree f = ints >-> pipeTTree f
-  where ints = mapM_ yield [0..]
+  where ints = each [0..]
 
 foldMTTree
   :: Monad m
@@ -151,8 +147,7 @@ foldMTTree
   -> Producer a (TR m) ()
   -> m (Either TreeError b)
 foldMTTree comb start done t prod =
-  runExceptT . fmap fst . runWriterT . flip evalStateT (t, 0)
-  $ P.foldM comb start done prod
+  runTR t $ P.foldM comb start done prod
 
 foldTTree
   :: Monad m
@@ -163,8 +158,7 @@ foldTTree
   -> Producer a (TR m) ()
   -> m (Either TreeError b)
 foldTTree comb start done t prod =
-  runExceptT . fmap fst . runWriterT . flip evalStateT (t, 0)
-  $ P.fold comb start done prod
+  runTR t $ P.fold comb start done prod
 
 
 -- foldlT :: Monad m => (b -> o -> m b) -> m b -> MachineT m k o -> m b
