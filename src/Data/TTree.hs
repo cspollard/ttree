@@ -127,8 +127,7 @@ pipeTTree f = go
       in do
         i <- await
         modify (second $ const i)
-        flip catchError ce $ yield =<< lift f'
-        go
+        flip catchError ce $ (yield =<< lift f') >> go
 
     ce EndOfTree = void (liftIO (putStrLn "end of tree"))
     ce e         = throwError e
