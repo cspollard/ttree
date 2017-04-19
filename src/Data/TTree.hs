@@ -20,13 +20,12 @@ import           Control.Monad.Trans        (lift)
 import           Data.Bifunctor             (first, second)
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as M
+import           Data.TBranch
+import           Data.TFile
 import           Foreign                    hiding (void)
 import           Foreign.C.String
 import           Pipes
 import qualified Pipes.Prelude              as P
-
-import           Data.TBranch
-import           Data.TFile
 
 
 -- void pointer
