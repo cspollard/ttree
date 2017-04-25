@@ -10,14 +10,15 @@ module Data.TTree
   ( ttree, TTree, isNullTree
   , module Data.TBranch
   , readBranch, readBranchMaybe
-  , TR, FromTTree(..)
-  , produceTTree, pipeTTree, foldTTree, foldMTTree, runTR
+  , TreeRead, FromTTree(..)
+  , produceTTree, runTTree
   , MonadIO(..)
   ) where
 
-import           Control.Monad.State.Strict
+import           Control.Monad.Fail
+import           Control.Monad.Reader       hiding (fail)
+import           Control.Monad.State.Strict hiding (fail)
 import           Control.Monad.Trans        (lift)
-import           Data.Bifunctor             (first, second)
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as M
 import           Data.TBranch
@@ -25,7 +26,7 @@ import           Data.TFile
 import           Foreign                    hiding (void)
 import           Foreign.C.String
 import           Pipes
-import qualified Pipes.Prelude              as P
+import           Prelude                    hiding (fail)
 
 
 -- void pointer
@@ -59,15 +60,16 @@ isNullTree (TTree p _) = withForeignPtr p (return . (== nullPtr))
 -- TODO
 -- this really should be of type Int -> TTree -> (ExceptT TreeError m) a
 -- but this is isomorphic, no?
-type TR m = StateT (TTree, Int) m
+type TreeRead m = ReaderT Int (StateT TTree m)
 
 -- note: this assumes that once a branch has been requested
 -- that we want to load it for *EVERY EVENT*
 readBranchMaybe
   :: (MonadIO m, Branchable a, Storable (HeapType a), Freeable (HeapType a))
-  => String -> TR m (Maybe a)
+  => String -> TreeRead m (Maybe a)
 readBranchMaybe s = do
-  (t, i) <- get
+  i <- ask
+  t <- get
   case s `M.lookup` ttreeBranches t of
     -- we've already read this branch at least once: don't alloc a
     -- new pointer
@@ -77,7 +79,7 @@ readBranchMaybe s = do
     -- new pointer
     Nothing -> do
       p <- liftIO $ newForeignPtr_ =<< calloc
-      modify . first . const
+      modify . const
         $ t { ttreeBranches = M.insert s (castForeignPtr p) (ttreeBranches t) }
       n <-
         liftIO
@@ -95,57 +97,53 @@ readBranchMaybe s = do
 -- but the laziness is killing me.
 -- fail if the branch doesn't exist or is unreadable.
 readBranch
-  :: (MonadIO m, Branchable a, Storable (HeapType a), Freeable (HeapType a))
-  => String -> TR m a
+  :: (MonadIO m, Branchable a, Storable (HeapType a), Freeable (HeapType a), MonadFail m)
+  => String -> TreeRead m a
 readBranch s = do
   m <- readBranchMaybe s
   case m of
-    Nothing -> error $ "unable to read branch " ++ s
+    Nothing -> fail $ "unable to read branch " ++ s
     Just x  -> return x
 
 
 class FromTTree a where
-    fromTTree :: MonadIO m => TR m a
+    fromTTree :: (MonadIO m, MonadFail m) => TreeRead m a
 
-runTR :: Monad m => TTree -> TR m a -> m a
-runTR t = flip evalStateT (t, 0)
+runTreeRead :: (MonadIO m, MonadFail m) => TreeRead m a -> Int -> Producer a (StateT TTree m) ()
+runTreeRead tr i = do
+  x <- lift . flip runReaderT i $ do
+    t <- get
+    n <- liftIO $ withForeignPtr (ttreePtr t) $ flip _ttreeLoadTree i
+    if n >= 0 then tr else fail "no bytes read in."
 
-pipeTTree :: MonadIO m => TR m a -> Pipe Int a (TR m) ()
-pipeTTree f = go
-  where
-    go = do
-      i <- await
-      modify (second $ const i)
-      (t, _) <- get
-      n <- liftIO $ withForeignPtr (ttreePtr t) $ flip _ttreeLoadTree i
-      unless (n < 0) $ do
-        x <- lift f
-        yield $! x
-        go
+  yield x
 
 
-produceTTree :: MonadIO m => TR m a -> Producer a (TR m) ()
-produceTTree f = ints >-> pipeTTree f
+produceTTree :: (MonadFail m, MonadIO m) => TreeRead m a -> Producer a (StateT TTree m) ()
+produceTTree f = for ints $ runTreeRead f
   where ints = each [0..]
 
-foldMTTree
-  :: Monad m
-  => (x -> a -> TR m x)
-  -> TR m x
-  -> (x -> TR m b)
-  -> TTree
-  -> Producer a (TR m) ()
-  -> m b
-foldMTTree comb start done t prod =
-  runTR t $ P.foldM comb start done prod
+runTTree :: Monad m => s -> Effect (StateT s m) a -> m a
+runTTree t = flip evalStateT t . runEffect
 
-foldTTree
-  :: Monad m
-  => (x -> a -> x)
-  -> x
-  -> (x -> b)
-  -> TTree
-  -> Producer a (TR m) ()
-  -> m b
-foldTTree comb start done t prod =
-  runTR t $ P.fold comb start done prod
+-- foldMTTree
+--   :: Monad m
+--   => (x -> a -> TreeRead m x)
+--   -> TreeRead m x
+--   -> (x -> TreeRead m b)
+--   -> TTree
+--   -> Producer a (TreeRead m) ()
+--   -> m b
+-- foldMTTree comb start done t prod =
+--   runTreeRead t $ P.foldM comb start done prod
+--
+-- foldTTree
+--   :: Monad m
+--   => (x -> a -> x)
+--   -> x
+--   -> (x -> b)
+--   -> TTree
+--   -> Producer a (TreeRead m) ()
+--   -> m b
+-- foldTTree comb start done t prod =
+--   runTreeRead t $ P.fold comb start done prod
