@@ -11,7 +11,7 @@ module Data.TTree
   , module Data.TBranch
   , readBranch, readBranchMaybe
   , TreeRead, FromTTree(..)
-  , produceTTree, runTTree
+  , produceTTree, runTTree, groupByP
   , MonadIO(..)
   ) where
 
@@ -23,6 +23,7 @@ import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as M
 import           Data.TBranch
 import           Data.TFile
+import           Data.These
 import           Foreign                    hiding (void)
 import           Foreign.C.String
 import           Pipes
@@ -147,3 +148,27 @@ runTTree t = flip evalStateT t . runEffect
 --   -> m b
 -- foldTTree comb start done t prod =
 --   runTreeRead t $ P.fold comb start done prod
+
+
+-- readEvent :: Producer
+groupByP
+  :: Monad m
+  => (t -> t' -> Ordering)
+  -> Producer t m b
+  -> Producer t' m b
+  -> Producer (These t t') m b
+groupByP f = go
+  where
+    go p1 p2 = do
+      e1 <- lift $ next p1
+      case e1 of
+        Left r -> return r
+        Right (x1, p1') -> do
+          e2 <- lift $ next p2
+          case e2 of
+            Left r -> return r
+            Right (x2, p2') ->
+              case f x1 x2 of
+                LT -> yield (This x1) >> go p1' p2
+                GT -> yield (That x2) >> go p1 p2'
+                EQ -> yield (These x1 x2) >> go p1' p2'
