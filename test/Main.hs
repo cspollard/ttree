@@ -40,8 +40,8 @@ main = do
       f <- tfileOpen fn
       t <- ttree f tn
       e <-
-        runTTree t
-        $ for (produceTTree (fromTTree :: TreeRead IO Event)) (liftIO . print)
+        runEffect
+        $ for (produceTTree (fromTTree :: TreeRead IO Event) t) (liftIO . print)
 
       print e
       tfileClose f

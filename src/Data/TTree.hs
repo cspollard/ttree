@@ -3,30 +3,36 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE RankNTypes                #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE TupleSections             #-}
 {-# LANGUAGE TypeFamilies              #-}
 
 module Data.TTree
-  ( ttree, TTree, isNullTree
+  ( module X
+  , ttree, TTree, isNullTree
   , module Data.TBranch
   , readBranch, readBranchMaybe
   , TreeRead, FromTTree(..)
-  , produceTTree, runTTree, groupByP
+  , produceTTree, runTTree, alignThesePipes, alignPipesBy
   , MonadIO(..)
   ) where
 
-import           Control.Monad.Fail
+import           Control.Monad.Fail         as X
+import           Control.Monad.IO.Class     as X
 import           Control.Monad.Reader       hiding (fail)
 import           Control.Monad.State.Strict hiding (fail)
 import           Control.Monad.Trans        (lift)
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as M
+import           Data.Semigroup
 import           Data.TBranch
 import           Data.TFile
 import           Data.These
 import           Foreign                    hiding (void)
 import           Foreign.C.String
 import           Pipes
+import           Pipes.Lift
+import qualified Pipes.Prelude              as P
 import           Prelude                    hiding (fail)
 
 
@@ -93,82 +99,101 @@ readBranchMaybe s = do
          then fmap Just . liftIO $ withForeignPtr p fromB
          else return Nothing
 
--- TODO
--- we should use MonadThrow here
--- but the laziness is killing me.
--- fail if the branch doesn't exist or is unreadable.
 readBranch
-  :: (MonadIO m, Branchable a, Storable (HeapType a), Freeable (HeapType a), MonadFail m)
+  :: ( MonadIO m, MonadFail m
+     , Branchable a, Storable (HeapType a), Freeable (HeapType a) )
   => String -> TreeRead m a
 readBranch s = do
   m <- readBranchMaybe s
   case m of
-    Nothing -> fail $ "unable to read branch " ++ s
+    Nothing -> do
+      i <- ask
+      fail $ "unable to read branch " ++ s ++ " for event number " ++ show i
     Just x  -> return x
 
 
 class FromTTree a where
     fromTTree :: (MonadIO m, MonadFail m) => TreeRead m a
 
-runTreeRead :: (MonadIO m, MonadFail m) => TreeRead m a -> Int -> Producer a (StateT TTree m) ()
-runTreeRead tr i = do
-  x <- lift . flip runReaderT i $ do
+
+runTreeRead
+  :: (MonadIO m, MonadFail m)
+  => TreeRead m a -> Pipe Int a (StateT TTree m) ()
+runTreeRead tr = do
+  i <- await
+  mx <- lift . flip runReaderT i $ do
     t <- get
     n <- liftIO $ withForeignPtr (ttreePtr t) $ flip _ttreeLoadTree i
-    if n >= 0 then tr else fail "no bytes read in."
+    if n >= 0 then Just <$> tr else return Nothing
 
-  yield x
+  case mx of
+    Just x  -> yield x
+    Nothing -> return ()
 
+-- produceTTree
+--   :: (MonadFail m, MonadIO m)
+--   => TreeRead m a -> TTree -> Producer a (StateT TTree m) ()
+produceTTree
+  :: (MonadFail m, MonadIO m)
+  => TreeRead m a -> TTree -> Producer a m ()
+produceTTree f t = evalStateP t $ each [0..] >-> runTreeRead f
 
-produceTTree :: (MonadFail m, MonadIO m) => TreeRead m a -> Producer a (StateT TTree m) ()
-produceTTree f = for ints $ runTreeRead f
-  where ints = each [0..]
 
 runTTree :: Monad m => s -> Effect (StateT s m) a -> m a
 runTTree t = flip evalStateT t . runEffect
 
--- foldMTTree
---   :: Monad m
---   => (x -> a -> TreeRead m x)
---   -> TreeRead m x
---   -> (x -> TreeRead m b)
---   -> TTree
---   -> Producer a (TreeRead m) ()
---   -> m b
--- foldMTTree comb start done t prod =
---   runTreeRead t $ P.foldM comb start done prod
---
--- foldTTree
---   :: Monad m
---   => (x -> a -> x)
---   -> x
---   -> (x -> b)
---   -> TTree
---   -> Producer a (TreeRead m) ()
---   -> m b
--- foldTTree comb start done t prod =
---   runTreeRead t $ P.fold comb start done prod
 
-
--- readEvent :: Producer
-groupByP
+alignThesePipes
   :: Monad m
   => (t -> t' -> Ordering)
-  -> Producer t m b
-  -> Producer t' m b
-  -> Producer (These t t') m b
-groupByP f = go
+  -> Producer t m ()
+  -> Producer t' m ()
+  -> Producer (These t t') m ()
+alignThesePipes comp = go
   where
     go p1 p2 = do
       e1 <- lift $ next p1
-      case e1 of
-        Left r -> return r
-        Right (x1, p1') -> do
-          e2 <- lift $ next p2
-          case e2 of
-            Left r -> return r
-            Right (x2, p2') ->
-              case f x1 x2 of
-                LT -> yield (This x1) >> go p1' p2
-                GT -> yield (That x2) >> go p1 p2'
-                EQ -> yield (These x1 x2) >> go p1' p2'
+      e2 <- lift $ next p2
+      case (e1, e2) of
+        (Left (), Left ()) -> return ()
+        (Left (), Right (x2, p2')) -> yield (That x2) >> go p1 p2'
+        (Right (x1, p1'), Left ()) -> yield (This x1) >> go p1' p2
+        (Right (x1, p1'), Right (x2, p2')) ->
+          case comp x1 x2 of
+            LT -> yield (This x1) >> go p1' p2
+            GT -> yield (That x2) >> go p1 p2'
+            EQ -> yield (These x1 x2) >> go p1' p2'
+
+
+
+alignPipesBy
+  :: (Monad m, Traversable f, Ord a)
+  => (t -> a)
+  -> f (Producer t m ())
+  -> Producer (f (Maybe t)) m ()
+alignPipesBy comp ps = go ps'
+  where
+    ps' = (>-> P.map (\t -> (t, comp t))) <$> ps
+
+    go ps'' = do
+      ftps <- lift $ traverse (\p -> (p,) <$> next p) ps''
+      let mxmin =
+            getOption $ foldMap (g . snd) ftps
+      case mxmin of
+        -- all producers are empty
+        Nothing   -> return ()
+        Just (Min xmin) -> do
+          let tmp = h xmin <$> ftps
+              ps''' = fst <$> tmp
+              xs = snd <$> tmp
+          yield xs >> go ps'''
+
+    g :: Either () ((t, a), t1) -> Option (Min a)
+    g (Left ())           = Option Nothing
+    g (Right ((_, x), _)) = Option . Just $ Min x
+
+    h _ (p, Left ()) = (p, Nothing)
+    h xmin (p, Right ((t, x), p')) =
+      if x == xmin
+        then (p', Just t)
+        else (p, Nothing)
