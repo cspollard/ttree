@@ -6,7 +6,7 @@
 
 module Data.TBranch
   ( Branchable(..), Freeable(..), VVector(..)
-  , CInt(..), CChar(..), CLong(..)
+  , CInt(..), CChar(..), CLong(..), CUInt(..), CULong(..)
   ) where
 
 import           Control.Applicative  (ZipList (..))
@@ -14,7 +14,8 @@ import           Control.Monad        ((>=>))
 import qualified Data.Vector          as V
 import qualified Data.Vector.Storable as VS
 import           Foreign              hiding (void)
-import           Foreign.C.Types      (CChar (..), CInt (..), CLong (..))
+import           Foreign.C.Types      (CChar (..), CInt (..), CLong (..),
+                                       CUInt (..), CULong (..))
 
 import           Data.STLVec
 
@@ -31,8 +32,16 @@ instance Branchable CInt where
     type HeapType CInt = CInt
     fromB = peek
 
+instance Branchable CUInt where
+    type HeapType CUInt = CUInt
+    fromB = peek
+
 instance Branchable CLong where
     type HeapType CLong = CLong
+    fromB = peek
+
+instance Branchable CULong where
+    type HeapType CULong = CULong
     fromB = peek
 
 instance Branchable Float where
@@ -81,6 +90,12 @@ instance Freeable CChar where
     free' = finalizerFree
 
 instance Freeable CInt where
+    free' = finalizerFree
+
+instance Freeable CUInt where
+    free' = finalizerFree
+
+instance Freeable CULong where
     free' = finalizerFree
 
 instance Freeable CLong where
