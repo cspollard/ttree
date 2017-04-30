@@ -118,9 +118,8 @@ class FromTTree a where
 
 runTreeRead
   :: (MonadIO m, MonadFail m)
-  => TreeRead m a -> Pipe Int a (StateT TTree m) ()
-runTreeRead tr = do
-  i <- await
+  => TreeRead m a -> Int -> Producer a (StateT TTree m) ()
+runTreeRead tr i = do
   mx <- lift . flip runReaderT i $ do
     t <- get
     n <- liftIO $ withForeignPtr (ttreePtr t) $ flip _ttreeLoadTree i
@@ -130,13 +129,11 @@ runTreeRead tr = do
     Just x  -> yield x
     Nothing -> return ()
 
--- produceTTree
---   :: (MonadFail m, MonadIO m)
---   => TreeRead m a -> TTree -> Producer a (StateT TTree m) ()
+
 produceTTree
   :: (MonadFail m, MonadIO m)
   => TreeRead m a -> TTree -> Producer a m ()
-produceTTree f t = evalStateP t $ each [0..] >-> runTreeRead f
+produceTTree f t = evalStateP t $ for (each [0..]) (runTreeRead f)
 
 
 runTTree :: Monad m => s -> Effect (StateT s m) a -> m a
