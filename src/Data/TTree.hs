@@ -13,7 +13,7 @@ module Data.TTree
   , module Data.TBranch
   , readBranch, readBranchMaybe
   , TreeRead, FromTTree(..)
-  , produceTTree, runTTree, alignThesePipes, alignPipesBy
+  , produceTTree, runTTree, readEntry, alignThesePipes, alignPipesBy
   , MonadIO(..)
   ) where
 
@@ -68,6 +68,9 @@ isNullTree (TTree p _) = liftIO $ withForeignPtr p (return . (== nullPtr))
 -- this really should be of type Int -> TTree -> (ExceptT TreeError m) a
 -- but this is isomorphic, no?
 type TreeRead m = ReaderT Int (StateT TTree m)
+
+readEntry :: Monad m => TreeRead m Int
+readEntry = ask
 
 -- note: this assumes that once a branch has been requested
 -- that we want to load it for *EVERY EVENT*
