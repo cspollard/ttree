@@ -131,14 +131,16 @@ runTreeRead tr = do
     Nothing -> return ()
 
 
-produceTTree
+runTTree
   :: (MonadFail m, MonadIO m)
   => TreeRead m a -> TTree -> Producer a m ()
-produceTTree f t = evalStateP t $ each [0..] >-> runTreeRead f
+runTTree f t = produceTTree f t $ each [0..]
 
 
-runTTree :: Monad m => s -> Effect (StateT s m) a -> m a
-runTTree t = flip evalStateT t . runEffect
+produceTTree
+  :: (MonadFail m, MonadIO m)
+  => TreeRead m a -> TTree -> Producer Int m () -> Producer a m ()
+produceTTree f t p = p >-> evalStateP t (runTreeRead f)
 
 
 alignThesePipes
