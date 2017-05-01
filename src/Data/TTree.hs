@@ -142,25 +142,28 @@ runTTree t = flip evalStateT t . runEffect
 
 
 alignThesePipes
-  :: Monad m
-  => (t -> t' -> Ordering)
+  :: (Monad m, Ord a)
+  => (t -> a)
+  -> (t' -> a)
   -> Producer t m ()
   -> Producer t' m ()
-  -> Producer (These t t') m ()
-alignThesePipes comp = go
+  -> Producer (a, These t t') m ()
+alignThesePipes comp comp' = go
   where
     go p1 p2 = do
       e1 <- lift $ next p1
       e2 <- lift $ next p2
       case (e1, e2) of
         (Left (), Left ()) -> return ()
-        (Left (), Right (x2, p2')) -> yield (That x2) >> go p1 p2'
-        (Right (x1, p1'), Left ()) -> yield (This x1) >> go p1' p2
+        (Left (), Right (x2, p2')) -> yield (comp' x2, That x2) >> go p1 p2'
+        (Right (x1, p1'), Left ()) -> yield (comp x1, This x1) >> go p1' p2
         (Right (x1, p1'), Right (x2, p2')) ->
-          case comp x1 x2 of
-            LT -> yield (This x1) >> go p1' p2
-            GT -> yield (That x2) >> go p1 p2'
-            EQ -> yield (These x1 x2) >> go p1' p2'
+          let a1 = comp x1
+              a2 = comp' x2
+          in case a1 `compare` a2 of
+            LT -> yield (a1, This x1) >> go p1' p2
+            GT -> yield (a2, That x2) >> go p1 p2'
+            EQ -> yield (a1, These x1 x2) >> go p1' p2'
 
 
 
@@ -168,7 +171,7 @@ alignPipesBy
   :: (Monad m, Traversable f, Ord a)
   => (t -> a)
   -> f (Producer t m ())
-  -> Producer (f (Maybe t)) m ()
+  -> Producer (a, f (Maybe t)) m ()
 alignPipesBy comp ps = go ps'
   where
     ps' = (>-> P.map (\t -> (t, comp t))) <$> ps
@@ -184,7 +187,7 @@ alignPipesBy comp ps = go ps'
           let tmp = h xmin <$> ftps
               ps''' = fst <$> tmp
               xs = snd <$> tmp
-          yield xs >> go ps'''
+          yield (xmin, xs) >> go ps'''
 
     g :: Either () ((t, a), t1) -> Option (Min a)
     g (Left ())           = Option Nothing
