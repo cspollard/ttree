@@ -2,9 +2,9 @@
 
 module Data.TH1 where
 
-import Foreign hiding (void)
+import           Foreign         hiding (void)
 
-import Foreign.C.Types (CUInt(..))
+import           Foreign.C.Types (CUInt (..))
 
 type TH1D = Ptr ()
 type TH1F = Ptr ()

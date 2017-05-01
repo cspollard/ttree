@@ -17,8 +17,8 @@ module Data.TTree
   , MonadIO(..)
   ) where
 
-import           Control.Monad.Fail         as X
-import           Control.Monad.IO.Class     as X
+import           Control.Monad.Fail         as X (MonadFail (..))
+import           Control.Monad.IO.Class     as X (MonadIO (..))
 import           Control.Monad.Reader       hiding (fail)
 import           Control.Monad.State.Strict hiding (fail)
 import           Control.Monad.Trans        (lift)
@@ -56,13 +56,13 @@ data TTree =
     , ttreeBranches :: Map String FVPtr
     }
 
-ttree :: TFile -> String -> IO TTree
-ttree f tn = do
+ttree :: MonadIO m => TFile -> String -> m TTree
+ttree f tn = liftIO $ do
     tp <- newForeignPtr_ =<< withCString tn (_ttree f)
     return $ TTree tp M.empty
 
-isNullTree :: TTree -> IO Bool
-isNullTree (TTree p _) = withForeignPtr p (return . (== nullPtr))
+isNullTree :: MonadIO m => TTree -> m Bool
+isNullTree (TTree p _) = liftIO $ withForeignPtr p (return . (== nullPtr))
 
 -- TODO
 -- this really should be of type Int -> TTree -> (ExceptT TreeError m) a

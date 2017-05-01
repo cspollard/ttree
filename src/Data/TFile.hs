@@ -1,22 +1,30 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 
-module Data.TFile where
+module Data.TFile
+  ( module X
+  , TFile(..)
+  , tfileOpen, tfileClose, tfileGet
+  ) where
 
-import           Foreign          hiding (void)
+import           Control.Monad.IO.Class as X (MonadIO (..))
+import           Foreign                hiding (void)
 import           Foreign.C.String
 
 newtype TFile = TFile (Ptr ())
 
 foreign import ccall "tfileC.h tfileOpen" _tfileOpen
     :: CString -> IO TFile
-foreign import ccall "tfileC.h tfileClose" tfileClose
+foreign import ccall "tfileC.h tfileClose" _tfileClose
     :: TFile -> IO ()
 foreign import ccall "tfileC.h tfileGet" _tfileGet
     :: TFile -> CString -> IO (Ptr ())
 
 
-tfileOpen :: String -> IO TFile
-tfileOpen = flip withCString _tfileOpen
+tfileOpen :: MonadIO m => String -> m TFile
+tfileOpen = liftIO . flip withCString _tfileOpen
 
-tfileGet :: TFile -> String -> IO (Ptr ())
-tfileGet = flip withCString . _tfileGet
+tfileGet :: MonadIO m => TFile -> String -> m (Ptr ())
+tfileGet tf s = liftIO . withCString s $ _tfileGet tf
+
+tfileClose :: MonadIO m => TFile -> m ()
+tfileClose = liftIO . _tfileClose
