@@ -1,12 +1,11 @@
 module Main where
 
 import           Control.Monad      (forM_)
+import           Data.TFile
+import           Data.TTree
 import           Data.Vector        (Vector)
 import           Pipes
 import           System.Environment (getArgs)
-
-import           Data.TFile
-import           Data.TTree
 
 data Event =
   Event
@@ -39,9 +38,12 @@ main = do
     $ \fn -> do
       f <- tfileOpen fn
       t <- ttree f tn
-      e <-
-        runEffect
-        $ for (runTTree (fromTTree :: TreeRead IO Event) t) (liftIO . print)
+      let ex =
+            runEffect
+            $ for (runTTree (fromTTree :: TreeRead IO Event) t) (liftIO . print)
 
-      print e
+          deal EndOfTTree         = return ()
+          deal (TBranchReadFailure s) = print s
+
+      catch ex deal
       tfileClose f

@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE ForeignFunctionInterface  #-}
+{-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE RankNTypes                #-}
@@ -13,11 +14,13 @@ module Data.TTree
   , module Data.TBranch
   , readBranch, readBranchMaybe
   , TreeRead, FromTTree(..)
-  , produceTTree, runTTree, readEntry, alignThesePipes, alignPipesBy
+  , readEntry, alignThesePipes, alignPipesBy
+  , runTTree, produceTTree
   , MonadIO(..)
+  , TTreeException(..)
   ) where
 
-import           Control.Monad.Fail         as X (MonadFail (..))
+import           Control.Monad.Catch        as X
 import           Control.Monad.IO.Class     as X (MonadIO (..))
 import           Control.Monad.Reader       hiding (fail)
 import           Control.Monad.State.Strict hiding (fail)
@@ -28,6 +31,7 @@ import           Data.Semigroup
 import           Data.TBranch
 import           Data.TFile
 import           Data.These
+import           Data.Typeable
 import           Foreign                    hiding (void)
 import           Foreign.C.String
 import           Pipes
@@ -102,8 +106,15 @@ readBranchMaybe s = do
          then fmap Just . liftIO $ withForeignPtr p fromB
          else return Nothing
 
+
+data TTreeException = EndOfTTree | TBranchReadFailure String
+  deriving (Typeable, Show)
+
+instance Exception TTreeException where
+
+
 readBranch
-  :: ( MonadIO m, MonadFail m
+  :: ( MonadIO m, MonadThrow m
      , Branchable a, Storable (HeapType a), Freeable (HeapType a) )
   => String -> TreeRead m a
 readBranch s = do
@@ -111,39 +122,28 @@ readBranch s = do
   case m of
     Nothing -> do
       i <- ask
-      fail $ "unable to read branch " ++ s ++ " for event number " ++ show i
+      throwM . TBranchReadFailure
+        $ "unable to read branch " ++ s ++ " for event number " ++ show i
     Just x  -> return x
 
 
 class FromTTree a where
-    fromTTree :: (MonadIO m, MonadFail m) => TreeRead m a
+    fromTTree :: (MonadIO m, MonadThrow m) => TreeRead m a
 
 
-runTreeRead
-  :: (MonadIO m, MonadFail m)
-  => TreeRead m a -> Pipe Int a (StateT TTree m) ()
-runTreeRead tr = do
-  i <- await
-  mx <- lift . flip runReaderT i $ do
+runTreeRead :: (MonadThrow m, MonadIO m, MonadState TTree m) => ReaderT Int m b -> Int -> m b
+runTreeRead tr i = do
     t <- get
     n <- liftIO $ withForeignPtr (ttreePtr t) $ flip _ttreeLoadTree i
-    if n >= 0 then Just <$> tr else return Nothing
+    if n >= 0 then runReaderT tr i else throwM EndOfTTree
 
-  case mx of
-    Just x  -> yield x >> runTreeRead tr
-    Nothing -> return ()
-
-
-runTTree
-  :: (MonadFail m, MonadIO m)
-  => TreeRead m a -> TTree -> Producer a m ()
-runTTree f t = produceTTree f t $ each [0..]
-
+runTTree :: (MonadThrow m, MonadIO m) => TreeRead m b -> TTree -> Producer' b m ()
+runTTree f t = evalStateP t $ produceTTree f $ each [0..]
 
 produceTTree
-  :: (MonadFail m, MonadIO m)
-  => TreeRead m a -> TTree -> Producer Int m () -> Producer a m ()
-produceTTree f t p = p >-> evalStateP t (runTreeRead f)
+  :: (MonadState TTree m, MonadIO m, MonadThrow m)
+  => ReaderT Int m c -> Producer' Int m a -> Producer' c m a
+produceTTree f p = for p (yield <=< lift . runTreeRead f)
 
 
 alignThesePipes
