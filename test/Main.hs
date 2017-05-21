@@ -42,7 +42,7 @@ main = do
             runEffect
             $ for (runTTree (fromTTree :: TreeRead IO Event) t) (liftIO . print)
 
-          deal EndOfTTree         = return ()
+          deal EndOfTTree             = return ()
           deal (TBranchReadFailure s) = print s
 
       catch ex deal

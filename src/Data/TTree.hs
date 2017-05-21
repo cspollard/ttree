@@ -131,14 +131,20 @@ class FromTTree a where
     fromTTree :: (MonadIO m, MonadThrow m) => TreeRead m a
 
 
-runTreeRead :: (MonadThrow m, MonadIO m, MonadState TTree m) => ReaderT Int m b -> Int -> m b
+runTreeRead
+  :: (MonadThrow m, MonadIO m, MonadState TTree m)
+  => ReaderT Int m b -> Int -> m b
 runTreeRead tr i = do
     t <- get
     n <- liftIO $ withForeignPtr (ttreePtr t) $ flip _ttreeLoadTree i
     if n >= 0 then runReaderT tr i else throwM EndOfTTree
 
-runTTree :: (MonadThrow m, MonadIO m) => TreeRead m b -> TTree -> Producer' b m ()
+
+runTTree
+  :: (MonadThrow m, MonadIO m)
+  => TreeRead m b -> TTree -> Producer' b m ()
 runTTree f t = evalStateP t $ produceTTree f $ each [0..]
+
 
 produceTTree
   :: (MonadState TTree m, MonadIO m, MonadThrow m)
