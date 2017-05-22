@@ -15,16 +15,16 @@ module Data.TTree
   , readBranch, readBranchMaybe
   , TreeRead, FromTTree(..)
   , readEntry, alignThesePipes, alignPipesBy
-  , runTTree, produceTTree
+  , runTTree, produceTTree, readTree, maybeReadTrees
   , MonadIO(..)
   , TTreeException(..)
   ) where
 
+import           Control.Arrow              (first)
 import           Control.Monad.Catch        as X
 import           Control.Monad.IO.Class     as X (MonadIO (..))
 import           Control.Monad.Reader       hiding (fail)
 import           Control.Monad.State.Strict hiding (fail)
-import           Control.Monad.Trans        (lift)
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as M
 import           Data.Semigroup
@@ -131,6 +131,9 @@ class FromTTree a where
     fromTTree :: (MonadIO m, MonadThrow m) => TreeRead m a
 
 
+-- TODO
+-- these names are horrible.
+
 runTreeRead
   :: (MonadThrow m, MonadIO m, MonadState TTree m)
   => ReaderT Int m b -> Int -> m b
@@ -138,6 +141,32 @@ runTreeRead tr i = do
     t <- get
     n <- liftIO $ withForeignPtr (ttreePtr t) $ flip _ttreeLoadTree i
     if n >= 0 then runReaderT tr i else throwM EndOfTTree
+
+
+readTree
+  :: (MonadIO m, MonadThrow m)
+  => TreeRead m a -> Int -> TTree -> m (a, TTree)
+readTree tr i t = flip runStateT t $ runTreeRead tr i
+
+
+maybeReadTree
+  :: (MonadIO m, MonadThrow m)
+  => TreeRead m a -> Maybe Int -> TTree -> m (Maybe a, TTree)
+maybeReadTree tr mi t =
+  case mi of
+    Nothing -> return (Nothing, t)
+    Just i  -> first Just <$> readTree tr i t
+
+
+maybeReadTrees
+  :: (MonadThrow m, MonadIO m)
+  => (TreeRead m a, Maybe Int, TTree)
+  -> (TreeRead m b, Maybe Int, TTree)
+  -> m ((Maybe a, Maybe b), (TTree, TTree))
+maybeReadTrees (tr1, mi1, t1) (tr2, mi2, t2) = do
+  (mx1, t1') <- maybeReadTree tr1 mi1 t1
+  (mx2, t2') <- maybeReadTree tr2 mi2 t2
+  return ((mx1, mx2), (t1', t2'))
 
 
 runTTree
