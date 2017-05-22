@@ -141,15 +141,18 @@ runTreeRead tr i = do
 
 
 runTTree
-  :: (MonadThrow m, MonadIO m)
+  :: (MonadIO m, MonadThrow m)
   => TreeRead m b -> TTree -> Producer' b m ()
-runTTree f t = evalStateP t $ produceTTree f $ each [0..]
+runTTree f = produceTTree f (each [0..])
 
 
 produceTTree
-  :: (MonadState TTree m, MonadIO m, MonadThrow m)
-  => ReaderT Int m c -> Producer' Int m a -> Producer' c m a
-produceTTree f p = for p (yield <=< lift . runTreeRead f)
+  :: (MonadThrow m, MonadIO m)
+  => TreeRead m b
+  -> Producer' Int (StateT TTree m) r
+  -> TTree
+  -> Producer' b m r
+produceTTree f p t = evalStateP t $ for p (yield <=< lift . runTreeRead f)
 
 
 alignThesePipes
