@@ -15,7 +15,7 @@ module Data.TTree
   , readBranch, readBranchMaybe
   , TreeRead, FromTTree(..)
   , readEntry, alignThesePipes, alignPipesBy
-  , runTTree, produceTTree, readTree, maybeReadTrees
+  , runTTree, produceTTree, readTree, alignTrees
   , MonadIO(..)
   , TTreeException(..)
   ) where
@@ -25,6 +25,7 @@ import           Control.Monad.Catch        as X
 import           Control.Monad.IO.Class     as X (MonadIO (..))
 import           Control.Monad.Reader       hiding (fail)
 import           Control.Monad.State.Strict hiding (fail)
+import           Data.Align
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as M
 import           Data.Semigroup
@@ -158,21 +159,35 @@ maybeReadTree tr mi t =
     Just i  -> first Just <$> readTree tr i t
 
 
-maybeReadTrees
-  :: (MonadThrow m, MonadIO m)
-  => (TreeRead m a, Maybe Int, TTree)
-  -> (TreeRead m b, Maybe Int, TTree)
-  -> m ((Maybe a, Maybe b), (TTree, TTree))
-maybeReadTrees (tr1, mi1, t1) (tr2, mi2, t2) = do
-  (mx1, t1') <- maybeReadTree tr1 mi1 t1
-  (mx2, t2') <- maybeReadTree tr2 mi2 t2
-  return ((mx1, mx2), (t1', t2'))
+data NoSuchTree = NoSuchTree deriving (Typeable, Show)
+instance Exception NoSuchTree where
+
+alignTrees
+  :: (Align f, Traversable f, MonadThrow m, MonadIO m)
+  => TreeRead m a
+  -> f TTree
+  -> Pipe (f (Maybe Int)) (f (Maybe a)) m ()
+alignTrees tr ts = do
+  mis <- await
+  xs <- lift . sequence $ alignWith f mis ts
+  let ts' = snd <$> xs
+      xs' = fst <$> xs
+  yield xs'
+  alignTrees tr ts'
+
+  where
+    f (These mi t) = maybeReadTree tr mi t
+    f (This _)     = throwM NoSuchTree
+    f (That t)     = return (Nothing, t)
 
 
 runTTree
-  :: (MonadIO m, MonadThrow m)
+  :: (MonadIO m, MonadCatch m)
   => TreeRead m b -> TTree -> Producer' b m ()
-runTTree f = produceTTree f (each [0..])
+runTTree f t = catch (produceTTree f (each [0..]) t) deal
+  where
+    deal EndOfTTree = return ()
+    deal x          = throwM x
 
 
 produceTTree
