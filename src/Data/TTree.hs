@@ -12,32 +12,25 @@ module Data.TTree
   ( module X
   , ttree, TTree, isNullTree
   , module Data.TBranch
-  , readBranch, readBranchMaybe
   , TreeRead, FromTTree(..)
-  , readEntry, alignThesePipes, alignPipesBy
-  , runTTree, produceTTree, readTree, alignTrees
+  , readEntry, readBranch, readBranchMaybe
+  , pipeTTree, readTTreeEntry
   , MonadIO(..)
   , TTreeException(..)
   ) where
 
-import           Control.Arrow              (first)
 import           Control.Monad.Catch        as X
 import           Control.Monad.IO.Class     as X (MonadIO (..))
 import           Control.Monad.Reader       hiding (fail)
 import           Control.Monad.State.Strict hiding (fail)
-import           Data.Align
 import           Data.Map.Strict            (Map)
 import qualified Data.Map.Strict            as M
-import           Data.Semigroup
 import           Data.TBranch
 import           Data.TFile
-import           Data.These
 import           Data.Typeable
 import           Foreign                    hiding (void)
 import           Foreign.C.String
 import           Pipes
-import           Pipes.Lift
-import qualified Pipes.Prelude              as P
 import           Prelude                    hiding (fail)
 
 
@@ -132,127 +125,24 @@ class FromTTree a where
     fromTTree :: (MonadIO m, MonadThrow m) => TreeRead m a
 
 
--- TODO
--- these names are horrible.
-
-runTreeRead
-  :: (MonadThrow m, MonadIO m, MonadState TTree m)
-  => ReaderT Int m b -> Int -> m b
-runTreeRead tr i = do
-    t <- get
-    n <- liftIO $ withForeignPtr (ttreePtr t) $ flip _ttreeLoadTree i
-    if n >= 0 then runReaderT tr i else throwM EndOfTTree
+readTTreeEntry
+  :: (MonadIO m, MonadState TTree m)
+  => ReaderT Int m b -> Int -> m (Maybe b)
+readTTreeEntry tr i = do
+  t <- get
+  n <- liftIO $ withForeignPtr (ttreePtr t) $ flip _ttreeLoadTree i
+  if n >= 0 then Just <$> runReaderT tr i else return Nothing
 
 
-readTree
-  :: (MonadIO m, MonadThrow m)
-  => TreeRead m a -> Int -> TTree -> m (a, TTree)
-readTree tr i t = flip runStateT t $ runTreeRead tr i
-
-
-maybeReadTree
-  :: (MonadIO m, MonadThrow m)
-  => TreeRead m a -> Maybe Int -> TTree -> m (Maybe a, TTree)
-maybeReadTree tr mi t =
-  case mi of
-    Nothing -> return (Nothing, t)
-    Just i  -> first Just <$> readTree tr i t
-
-
-data NoSuchTree = NoSuchTree deriving (Typeable, Show)
-instance Exception NoSuchTree where
-
-alignTrees
-  :: (Align f, Traversable f, MonadThrow m, MonadIO m)
-  => TreeRead m a
-  -> f TTree
-  -> Pipe (f (Maybe Int)) (f (Maybe a)) m ()
-alignTrees tr ts = do
-  mis <- await
-  xs <- lift . sequence $ alignWith f mis ts
-  let ts' = snd <$> xs
-      xs' = fst <$> xs
-  yield xs'
-  alignTrees tr ts'
-
-  where
-    f (These mi t) = maybeReadTree tr mi t
-    f (This _)     = throwM NoSuchTree
-    f (That t)     = return (Nothing, t)
-
-
-runTTree
-  :: (MonadIO m, MonadCatch m)
-  => TreeRead m b -> TTree -> Producer' b m ()
-runTTree f t = catch (produceTTree f (each [0..]) t) deal
-  where
-    deal EndOfTTree = return ()
-    deal x          = throwM x
-
-
-produceTTree
-  :: (MonadThrow m, MonadIO m)
-  => TreeRead m b
-  -> Producer' Int (StateT TTree m) r
-  -> TTree
-  -> Producer' b m r
-produceTTree f p t = evalStateP t $ for p (yield <=< lift . runTreeRead f)
-
-
-alignThesePipes
-  :: (Monad m, Ord a)
-  => (t -> a)
-  -> (t' -> a)
-  -> Producer t m ()
-  -> Producer t' m ()
-  -> Producer (a, These t t') m ()
-alignThesePipes comp comp' = go
-  where
-    go p1 p2 = do
-      e1 <- lift $ next p1
-      e2 <- lift $ next p2
-      case (e1, e2) of
-        (Left (), Left ()) -> return ()
-        (Left (), Right (x2, p2')) -> yield (comp' x2, That x2) >> go p1 p2'
-        (Right (x1, p1'), Left ()) -> yield (comp x1, This x1) >> go p1' p2
-        (Right (x1, p1'), Right (x2, p2')) ->
-          let a1 = comp x1
-              a2 = comp' x2
-          in case a1 `compare` a2 of
-            LT -> yield (a1, This x1) >> go p1' p2
-            GT -> yield (a2, That x2) >> go p1 p2'
-            EQ -> yield (a1, These x1 x2) >> go p1' p2'
-
-
-
-alignPipesBy
-  :: (Monad m, Traversable f, Ord a)
-  => (t -> a)
-  -> f (Producer t m ())
-  -> Producer (a, f (Maybe t)) m ()
-alignPipesBy comp ps = go ps'
-  where
-    ps' = (>-> P.map (\t -> (t, comp t))) <$> ps
-
-    go ps'' = do
-      ftps <- lift $ traverse (\p -> (p,) <$> next p) ps''
-      let mxmin =
-            getOption $ foldMap (g . snd) ftps
-      case mxmin of
-        -- all producers are empty
-        Nothing   -> return ()
-        Just (Min xmin) -> do
-          let tmp = h xmin <$> ftps
-              ps''' = fst <$> tmp
-              xs = snd <$> tmp
-          yield (xmin, xs) >> go ps'''
-
-    g :: Either () ((t, a), t1) -> Option (Min a)
-    g (Left ())           = Option Nothing
-    g (Right ((_, x), _)) = Option . Just $ Min x
-
-    h _ (p, Left ()) = (p, Nothing)
-    h xmin (p, Right ((t, x), p')) =
-      if x == xmin
-        then (p', Just t)
-        else (p, Nothing)
+pipeTTree
+  :: (MonadIO m, MonadState TTree m)
+  => ReaderT Int m b
+  -> Pipe Int b m ()
+pipeTTree f = do
+  i <- await
+  mx <- lift $ readTTreeEntry f i
+  case mx of
+    Just x -> do
+      yield x
+      pipeTTree f
+    Nothing -> return ()

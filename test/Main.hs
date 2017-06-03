@@ -5,6 +5,8 @@ import           Data.TFile
 import           Data.TTree
 import           Data.Vector        (Vector)
 import           Pipes
+import           Pipes.Lift
+import qualified Pipes.Prelude      as P
 import           System.Environment (getArgs)
 
 data Event =
@@ -38,12 +40,9 @@ main = do
     $ \fn -> do
       f <- tfileOpen fn
       t <- ttree f tn
-      let ex =
-            runEffect
-            $ for (runTTree (fromTTree :: TreeRead IO Event) t) (liftIO . print)
+      runEffect . evalStateP t
+        $ each [0..]
+          >-> pipeTTree (fromTTree :: TreeRead IO Event)
+          >-> P.print
 
-          deal EndOfTTree             = return ()
-          deal (TBranchReadFailure s) = print s
-
-      catch ex deal
       tfileClose f
