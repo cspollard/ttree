@@ -23,8 +23,8 @@ import           Control.Monad.Catch        as X
 import           Control.Monad.IO.Class     as X (MonadIO (..))
 import           Control.Monad.Reader       hiding (fail)
 import           Control.Monad.State.Strict hiding (fail)
-import           Data.Map.Strict            (Map)
-import qualified Data.Map.Strict            as M
+import           Data.HashMap.Strict        (HashMap)
+import qualified Data.HashMap.Strict        as HM
 import           Data.TBranch
 import           Data.TFile
 import           Data.Typeable
@@ -51,13 +51,13 @@ foreign import ccall "ttreeC.h &ttreeFree" _ttreeFree
 data TTree =
   TTree
     { ttreePtr      :: FVPtr
-    , ttreeBranches :: Map String FVPtr
+    , ttreeBranches :: HashMap String FVPtr
     }
 
 ttree :: MonadIO m => TFile -> String -> m TTree
 ttree f tn = liftIO $ do
     tp <- newForeignPtr_ =<< withCString tn (_ttree f)
-    return $ TTree tp M.empty
+    return $ TTree tp HM.empty
 
 isNullTree :: MonadIO m => TTree -> m Bool
 isNullTree (TTree p _) = liftIO $ withForeignPtr p (return . (== nullPtr))
@@ -78,7 +78,7 @@ readBranchMaybe
 readBranchMaybe s = do
   i <- ask
   t <- get
-  case s `M.lookup` ttreeBranches t of
+  case s `HM.lookup` ttreeBranches t of
     -- we've already read this branch at least once: don't alloc a
     -- new pointer
     Just p  -> fmap Just . liftIO $ withForeignPtr (castForeignPtr p) fromB
@@ -88,7 +88,7 @@ readBranchMaybe s = do
     Nothing -> do
       p <- liftIO $ newForeignPtr_ =<< calloc
       modify . const
-        $ t { ttreeBranches = M.insert s (castForeignPtr p) (ttreeBranches t) }
+        $ t { ttreeBranches = HM.insert s (castForeignPtr p) (ttreeBranches t) }
       n <-
         liftIO
           $ withCString s
