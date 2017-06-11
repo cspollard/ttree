@@ -11,6 +11,7 @@ license:             BSD3
 license-file:        LICENSE
 author:              Chris Pollard
 maintainer:          cspollard@gmail.com
+category:            Data
 build-type:          Configure
 cabal-version:       >=1.10
 
