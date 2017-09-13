@@ -30,22 +30,22 @@ library
   cc-options:          -std=c++11 -m64
   extra-libraries:     stdc++ m dl Core RIO Tree Hist
   ghc-options:         -pgmlg++ -Wall
-  build-depends:       base == 4.9.*
-                     , primitive == 0.6.*
-                     , vector == 0.11.*
-                     , unordered-containers == 0.2.*
-                     , exceptions == 0.8.*
-                     , mtl == 2.2.*
-                     , pipes == 4.3.*
+  build-depends:       base
+                     , primitive
+                     , vector
+                     , unordered-containers
+                     , exceptions
+                     , mtl
+                     , pipes
   hs-source-dirs:      src
   default-language:    Haskell2010
 
 executable ttreeTest
   main-is:             test/Main.hs
-  build-depends:       base == 4.9.*
-                     , vector == 0.11.*
-                     , transformers == 0.5.*
-                     , pipes == 4.3.*
-                     , ttree == 0.2.*
+  build-depends:       base
+                     , vector
+                     , transformers
+                     , pipes
+                     , ttree
   default-language:    Haskell2010
   ghc-options:         -pgmlg++ -Wall
