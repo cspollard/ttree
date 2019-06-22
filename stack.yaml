@@ -1,6 +1,9 @@
 packages:
 - '.'
 extra-deps:
+- functor-combinators-0.1.1.0    
+- trivial-constraint-0.5.1.0    
+
 flags: {}
 extra-package-dbs: []
 resolver: lts-13.25

@@ -1,113 +1,47 @@
-{-# LANGUAGE CPP                       #-}
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE RankNTypes                #-}
-{-# LANGUAGE TypeFamilies              #-}
-
-module Data.TBranch
-  ( Branchable(..), Freeable(..), VVector(..)
-  , CInt(..), CChar(..), CLong(..), CUInt(..), CULong(..)
-  ) where
-
-import           Control.Applicative  (ZipList (..))
-import           Control.Monad        ((>=>))
-import           Data.STLVec
-import qualified Data.Vector          as V
-import qualified Data.Vector.Storable as VS
-import           Foreign              hiding (void)
-import           Foreign.C.Types      (CChar (..), CInt (..), CLong (..),
-                                       CUInt (..), CULong (..))
-
-class Branchable b where
-    type HeapType b :: *
-    fromB :: Ptr (HeapType b) -> IO b
+module Data.TBranch where
 
 
-instance Branchable CChar where
-    type HeapType CChar = CChar
-    fromB = peek
-
-instance Branchable CInt where
-    type HeapType CInt = CInt
-    fromB = peek
-
-instance Branchable CUInt where
-    type HeapType CUInt = CUInt
-    fromB = peek
-
-instance Branchable CLong where
-    type HeapType CLong = CLong
-    fromB = peek
-
-instance Branchable CULong where
-    type HeapType CULong = CULong
-    fromB = peek
-
-instance Branchable Float where
-    type HeapType Float = Float
-    fromB = peek
-
-instance Branchable Double where
-    type HeapType Double = Double
-    fromB = peek
-
-instance Vecable a => Branchable (V.Vector a) where
-    type HeapType (V.Vector a) = VecPtr a
-    fromB = fmap VS.convert . (peek >=> toV)
-
-instance Vecable a => Branchable [a] where
-    type HeapType [a] = VecPtr a
-    fromB = fmap V.toList . fromB
-
-instance Vecable a => Branchable (ZipList a) where
-    type HeapType (ZipList a) = VecPtr a
-    fromB = fmap ZipList . fromB
+import Foreign              hiding (void)
+import Data.Vector
+import Data.STLVec
+import TTree.Internal.Common
 
 
-newtype VVector a = VVector { fromVVector :: V.Vector (V.Vector a) } deriving Show
-
-instance VVecable a => Branchable (VVector a) where
-    type HeapType (VVector a) = VVecPtr a
-    fromB vvp = do
-      vpp <- (peek >=> readVV) vvp
-
-      -- immediately freeze vpp and free it
-      vv <- VS.freeze . VS.MVector (fromEnum $ sizeV vpp)
-              =<< newForeignPtr_ (dataV vpp)
-
-      p' <- malloc
-      poke p' vpp
-      finalizeForeignPtr =<< newForeignPtr freeV p'
-
-      fmap VVector . mapM (fmap VS.convert . toV) $ VS.convert vv
+data BVar s a where
+  BS :: Storable a => s -> BVar s a
+  BV :: Vecable a => s -> BVar s (Vector a)
+  BVV :: Vecable2 a => s -> BVar s (Vector (Vector a))
 
 
-class Freeable a where
-    free' :: FunPtr (Ptr a -> IO ())
 
-instance Freeable CChar where
-    free' = finalizerFree
+unBVar :: BVar s a -> s
+unBVar (BS s) = s
+unBVar (BV s) = s
+unBVar (BVV s) = s
 
-instance Freeable CInt where
-    free' = finalizerFree
 
-instance Freeable CUInt where
-    free' = finalizerFree
+toConst :: BVar s a -> Const s a
+toConst = unBVar >>> Const
 
-instance Freeable CULong where
-    free' = finalizerFree
 
-instance Freeable CLong where
-    free' = finalizerFree
+fmapBVar :: Functor f => (s -> f s') -> BVar s a -> f (BVar s' a)
+fmapBVar f (BS s) = BS <$> f s
+fmapBVar f (BV s) = BV <$> f s
+fmapBVar f (BVV s) = BVV <$> f s
 
-instance Freeable Float where
-    free' = finalizerFree
 
-instance Freeable Double where
-    free' = finalizerFree
+mapBVar :: (s -> s') -> BVar s a -> BVar s' a
+mapBVar f = runIdentity <<< fmapBVar (Identity <<< f)
 
-instance Vecable a => Freeable (VecPtr a) where
-    free' = freeV
 
-instance VVecable a => Freeable (VVecPtr a) where
-    free' = freeVV
+vecFromPtr :: Vecable a => VecPtr a -> IO (Vector a)
+vecFromPtr = fmap convert <<< toV
+
+
+readBVar :: BVar (ForeignPtr ()) ~> IO
+readBVar (BS p) = withForeignPtr p $ peek <<< castPtr
+readBVar (BV p) = withForeignPtr p $ vecFromPtr <<< VecPtr
+readBVar (BVV p) = withForeignPtr p $ \p' -> do
+  vvp <- readVV $ VVecPtr p'
+  vecp <- vecFromPtr vvp
+  traverse vecFromPtr vecp

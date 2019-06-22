@@ -6,9 +6,11 @@ module Data.TFile
   , tfileOpen, tfileClose, tfileGet
   ) where
 
+
 import           Control.Monad.IO.Class as X (MonadIO (..))
 import           Foreign                hiding (void)
 import           Foreign.C.String
+
 
 newtype TFile = TFile (Ptr ())
 
