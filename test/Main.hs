@@ -16,11 +16,12 @@ import Control.Arrow ((<<<), (>>>))
 import qualified Data.Vector as V
 
 
-test :: Final Applicative (BVar String) Float
+test :: Final Applicative (BVar String) (Float, Float)
 test = do
-  y <- inject $ BS @Float "mu"
-  x <- inject $ BS @Float "mu"
-  return $ x + y * 2
+  y <- inject $ BV @Float "jet_pt"
+  x <- inject $ BV @Float "jet_eta"
+  z <- inject $ BVV @Float "jet_pv_track_pt"
+  return $ (V.head x + V.head y * 2, (V.head >>> V.head) z)
 
 
 
@@ -38,49 +39,10 @@ main = do
     traverse getFirst <<< getI unBVar
     $ hmap (mapBVar (uncurry HM.singleton) <<< withPtr) test
 
-  mapM_ print $ HM.keys branches
+  mapM_ putStrLn $ HM.keys branches
 
   binterpret id (either error return) $ connectBranches tp branches
 
   b <- interpret (runWithPtrs branches >>> mapBVar (either error id) >>> readBVar) test
 
   print b
-
-
--- data Event =
---   Event
---     CInt
---     CInt
---     Float
---     (Vector Float)
---     (Vector Float)
---     (Vector Float)
---     (VVector Double)
---     (VVector CInt)
---     deriving Show
--- 
--- instance FromTTree Event where
---   fromTTree =
---     Event
---       <$> readBranch "Run"
---       <*> readBranch "Event"
---       <*> readBranch "Mu"
---       <*> readBranch "JetPt"
---       <*> readBranch "JetEta"
---       <*> readBranch "JetPhi"
---       <*> readBranch "JetTracksPt"
---       <*> readBranch "JetTracksisTight"
--- 
--- main :: IO ()
--- main = do
---   (tn:fns) <- getArgs
---   forM_ fns
---     $ \fn -> do
---       f <- tfileOpen fn
---       t <- ttree f tn
---       runEffect . evalStateP t
---         $ each [0..]
---           >-> pipeTTree (fromTTree :: TreeRead IO Event)
---           >-> P.print
--- 
---       tfileClose f

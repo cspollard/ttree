@@ -25,7 +25,7 @@ foreign import ccall "ttreeC.h ttreeLoadTree" _ttreeLoadTree
 foreign import ccall "ttreeC.h ttreeGetBranchEntry" _ttreeGetBranchEntry
   :: VP -> CString -> Int -> Ptr a -> IO Int
 foreign import ccall "ttreeC.h &ttreeFree" _ttreeFree
-  :: FunPtr (Ptr () -> IO ())
+  :: FunPtr (VP -> IO ())
 
 
 type MHM = HM.MonoidalHashMap
@@ -42,8 +42,10 @@ withPtr = \case
     BS (s, pure $ castForeignPtr <$> mallocForeignPtr @a)
 
   -- for vectors we do not take responsibility for freeing
-  BV s -> BV (s, pure $ (newForeignPtr_ <<< castPtr) =<< calloc @(Ptr ()))
-  BVV s -> BVV (s, pure $ (newForeignPtr_ <<< castPtr) =<< calloc @(Ptr ()))
+  BV s ->
+    BV (s, pure $ castForeignPtr <$> mallocForeignPtr @(Ptr ()))
+  BVV s ->
+    BVV (s, pure $ castForeignPtr <$> mallocForeignPtr @(Ptr ()))
 
 
 runWithPtrs :: MHM String VFP -> BVar String ~> BVar (Either String VFP)

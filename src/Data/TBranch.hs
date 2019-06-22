@@ -5,6 +5,7 @@ import Foreign              hiding (void)
 import Data.Vector
 import Data.STLVec
 import TTree.Internal.Common
+import Control.Monad ((<=<))
 
 
 data BVar s a where
@@ -40,8 +41,10 @@ vecFromPtr = fmap convert <<< toV
 
 readBVar :: BVar (ForeignPtr ()) ~> IO
 readBVar (BS p) = withForeignPtr p $ peek <<< castPtr
-readBVar (BV p) = withForeignPtr p $ vecFromPtr <<< VecPtr
+readBVar (BV p) =
+  withForeignPtr p $ (vecFromPtr <<< VecPtr) <=< (peek <<< castPtr)
+
 readBVar (BVV p) = withForeignPtr p $ \p' -> do
-  vvp <- readVV $ VVecPtr p'
+  vvp <- (readVV <<< VVecPtr) =<< (peek <<< castPtr) p'
   vecp <- vecFromPtr vvp
   traverse vecFromPtr vecp

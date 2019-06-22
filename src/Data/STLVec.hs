@@ -69,7 +69,7 @@ foreign import ccall "ttreeC.h &vvFreeD" vvFreeD
   :: FunPtr (Ptr (VVecPtr Double) -> IO ())
 
 
-newtype VecPtr a = VecPtr (Ptr ()) deriving Storable
+newtype VecPtr a = VecPtr (Ptr ()) deriving (Storable, Show)
 
 class Storable a => Vecable a where
   sizeV :: VecPtr a -> CInt
