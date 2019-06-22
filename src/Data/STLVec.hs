@@ -1,18 +1,17 @@
-{-# LANGUAGE ForeignFunctionInterface #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE CPP                        #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE ForeignFunctionInterface   #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE NoMonomorphismRestriction  #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE TypeFamilies               #-}
 
 module Data.STLVec where
 
-import Foreign hiding (void)
-
-import Data.Vector.Storable (Vector)
+import           Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as VS
-import Foreign.C.Types (CInt(..), CChar(..))
+import           Foreign              hiding (void)
+import           Foreign.C.Types      (CChar (..), CInt (..))
 
 foreign import ccall "ttreeC.h vectorSizeC" vectorSizeC
     :: VecPtr CChar -> CInt
@@ -86,7 +85,9 @@ class Storable a => Vecable a where
     freeV :: FunPtr (Ptr (VecPtr a) -> IO ())
 
     toV :: VecPtr a -> IO (Vector a)
-    toV vp = VS.freeze . VS.MVector (fromEnum $ sizeV vp) =<< newForeignPtr_ (dataV vp)
+    toV vp = do
+      p <- newForeignPtr_ (dataV vp)
+      VS.freeze $ VS.MVector (fromEnum $ sizeV vp) p
 
 
 instance Vecable CChar where

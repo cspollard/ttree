@@ -11,13 +11,12 @@ module Data.TBranch
 
 import           Control.Applicative  (ZipList (..))
 import           Control.Monad        ((>=>))
+import           Data.STLVec
 import qualified Data.Vector          as V
 import qualified Data.Vector.Storable as VS
 import           Foreign              hiding (void)
 import           Foreign.C.Types      (CChar (..), CInt (..), CLong (..),
                                        CUInt (..), CULong (..))
-
-import           Data.STLVec
 
 class Branchable b where
     type HeapType b :: *
