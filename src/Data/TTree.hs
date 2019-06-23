@@ -13,7 +13,7 @@ import TTree.Internal.Common
 import Data.Semigroup (First(..))
 
 
--- void pointer
+-- void pointers
 type VP = Ptr ()
 type VFP = ForeignPtr ()
 
@@ -34,6 +34,9 @@ data TTree = TTree !VP
 
 
 
+-- this should be rewritten as a fold (somehow) over
+-- the program, collecting BVars and reusing pointers
+-- if they have already been allocated.
 withPtr :: BVar String ~> BVar (String, First (IO VFP))
 withPtr = \case
 
