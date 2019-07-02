@@ -6,16 +6,22 @@ import Foreign
 import Foreign.C.Types
 import Data.Foldable (traverse_)
 import Foreign.C.String
-import Data.TBranch
+import Data.Semigroup (First(..))
+import Data.Bifunctor (first)
+import Data.BVar
 import Data.TFile
 import qualified Data.HashMap.Monoidal as HM
+import qualified Data.Vector as V
+import Data.STLVec
 import TTree.Internal.Common
-import Data.Semigroup (First(..))
 
 
 -- void pointers
 type VP = Ptr ()
 type VFP = ForeignPtr ()
+type HM = HM.MonoidalHashMap
+
+
 
 
 foreign import ccall "ttreeC.h ttree" _ttree
@@ -33,22 +39,40 @@ type MHM = HM.MonoidalHashMap
 data TTree = TTree !VP
 
 
+scalar :: (Inject t, Storable a) => s -> t (BVar s) a
+scalar = inject . BS
+
+
+vector
+  :: (Inject t, Vecable a)
+  => s -> t (BVar s) (V.Vector a)
+vector = inject . BV
+
+
+vector2
+  :: (Inject t, Vecable2 a)
+  => s -> t (BVar s) (V.Vector (V.Vector a))
+vector2 = inject . BVV
+
 
 -- this should be rewritten as a fold (somehow) over
 -- the program, collecting BVars and reusing pointers
 -- if they have already been allocated.
-withPtr :: BVar String ~> BVar (String, First (IO VFP))
+withPtr :: BVar String ~> Const (String, IO VFP)
 withPtr = \case
 
   -- for scalars we explicitly take responsibility for freeing
   (BS s :: BVar String a) ->
-    BS (s, pure $ castForeignPtr <$> mallocForeignPtr @a)
+    Const <<< (s,) $ castForeignPtr <$> mallocForeignPtr @a
 
   -- for vectors we do not take responsibility for freeing
-  BV s ->
-    BV (s, pure $ castForeignPtr <$> mallocForeignPtr @(Ptr ()))
-  BVV s ->
-    BVV (s, pure $ castForeignPtr <$> mallocForeignPtr @(Ptr ()))
+  (BV s) ->
+    Const <<< (s,)
+    $ castForeignPtr <$> mallocForeignPtr @(Ptr ())
+
+  (BVV s) ->
+    Const <<< (s,)
+    $ castForeignPtr <$> mallocForeignPtr @(Ptr ())
 
 
 runWithPtrs :: MHM String VFP -> BVar String ~> BVar (Either String VFP)
@@ -83,6 +107,24 @@ isNullTree (TTree p) = p == nullPtr
 
 loadEntry :: TTree -> Int -> IO Bool
 loadEntry (TTree p) i = (>= 0) <$> _ttreeLoadTree p i
+
+
+marshalling :: Free (BVar String) a -> IO (HM String VFP)
+marshalling prog =
+  traverse getFirst <<< getConst $ interpret go prog
+  where
+    go :: BVar String ~> Const (HM String (First (IO VFP)))
+    go =
+      first (uncurry HM.singleton <<< fmap First)
+      <<< withPtr
+
+
+readVars :: HM String VFP -> BVar String ~> IO
+readVars branches =
+  runWithPtrs branches
+  >>> mapBVar (either error id)
+  >>> readBVar
+
 
 
 -- TODO

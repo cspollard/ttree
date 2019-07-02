@@ -1,13 +1,15 @@
-module Data.TBranch where
+module Data.BVar where
 
 
 import Foreign              hiding (void)
 import Data.Vector
 import Data.STLVec
 import TTree.Internal.Common
-import Control.Monad ((<=<))
 
 
+
+-- could unify this into one constructor with a "Branchable"
+-- constraint, but then simple Storables become annoying
 data BVar s a where
   BS :: Storable a => s -> BVar s a
   BV :: Vecable a => s -> BVar s (Vector a)
@@ -15,14 +17,16 @@ data BVar s a where
 
 
 
-unBVar :: BVar s a -> s
-unBVar (BS s) = s
-unBVar (BV s) = s
-unBVar (BVV s) = s
+runBVar :: BVar s a -> s
+runBVar (BS s) = s
+runBVar (BV s) = s
+runBVar (BVV s) = s
 
 
+-- Const s a has no constraints on a
+-- => can always convert
 toConst :: BVar s a -> Const s a
-toConst = unBVar >>> Const
+toConst = runBVar >>> Const
 
 
 fmapBVar :: Functor f => (s -> f s') -> BVar s a -> f (BVar s' a)
@@ -35,16 +39,21 @@ mapBVar :: (s -> s') -> BVar s a -> BVar s' a
 mapBVar f = runIdentity <<< fmapBVar (Identity <<< f)
 
 
-vecFromPtr :: Vecable a => VecPtr a -> IO (Vector a)
-vecFromPtr = fmap convert <<< toV
-
-
 readBVar :: BVar (ForeignPtr ()) ~> IO
 readBVar (BS p) = withForeignPtr p $ peek <<< castPtr
 readBVar (BV p) =
-  withForeignPtr p $ (vecFromPtr <<< VecPtr) <=< (peek <<< castPtr)
+  withForeignPtr p
+  $ (castPtr >>> peek)
+    >=> (VecPtr >>> vecFromPtr)
 
-readBVar (BVV p) = withForeignPtr p $ \p' -> do
-  vvp <- (readVV <<< VVecPtr) =<< (peek <<< castPtr) p'
-  vecp <- vecFromPtr vvp
-  traverse vecFromPtr vecp
+-- nicer in point-full form?
+readBVar (BVV p) =
+  withForeignPtr p
+  $ (castPtr >>> peek)
+    >=> (VVecPtr >>> readVV)
+    >=> vecFromPtr
+    >=> traverse vecFromPtr
+
+
+vecFromPtr :: Vecable a => VecPtr a -> IO (Vector a)
+vecFromPtr = toV >>> fmap convert
