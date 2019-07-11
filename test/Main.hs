@@ -1,91 +1,175 @@
-{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE Arrows #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE TypeApplications #-}
+
+
 
 module Main where
 
 
+import Prelude hiding (id, (.))
 import System.Environment (getArgs)
-import Data.BVar
-import Data.TTree
+import TTree.Branch
+import TTree.TTree
+import TTree.TFile
+import Control.Arrow
+import Data.Vector (Vector)
+import Analysis.Free
+import qualified Data.HashMap.Monoidal as HM
+import Analysis.Const
+import Control.Category
+import Data.Profunctor
+import Data.Functor.Compose
+import Data.Profunctor.Traversing
+import Data.Semigroup (First(..))
+import Control.Monad (join)
 import Data.Monoid (Product(..))
-import Data.TFile
-import Data.Functor.Combinator
-import Data.HFunctor
-import Control.Arrow ((>>>), (<<<))
-import qualified Data.Vector as V
-
-
-data Tell s a where
-  Tell :: s -> Tell s ()
+import Foreign
 
 
 
-test :: Free (Tell (Product Double) :+: BVar String) (Float, Float, Float)
-test = do
-  mu <- s "mu"
-  y <- v "jet_pt"
-  if y V.! 1 > 20
-    then sf $ Product 0.9
-    else sf $ Product 1.2
-  x <- v "jet_eta"
-  z <- v2 "jet_pv_track_pt"
-  sf $ Product 1.1
-  return $ (mu, V.head x + V.head y * 2, (V.head >>> V.head) z)
+type Vars = Kleisli []
 
-  where
-    s = inject <<< inR <<< BS
-    v = inject <<< inR <<< BV
-    v2 = inject <<< inR <<< BVV
-    sf = inject <<< inL <<< Tell
+type SFs = Kleisli ((,) (Product Float))
 
+sf :: SFs Float ()
+sf = Kleisli $ \w -> (Product w, ())
 
-collapseTell :: Free (Tell s :+: f) a -> Free f a
-collapseTell = hbind $ \case
-  L1 (Tell _) -> pure ()
-  R1 b -> inject b
+type Ret = (Float, Vector Float, Vector Float, Vector (Vector Float))
+
+ana
+  :: Members arrs '[ L String BS, L String BV, L String BV2, Vars , SFs ]
+  => Analysis arrs () Ret
+ana = proc store -> do
+  jpts <- vector "jet_pt" -< store
+  jetas <- vector "jet_eta" -< store
+  jpvtrkpt <- vector2 "jet_pv_track_pt" -< store
+  () <- liftFree <<< inj $ sf -< 1.1
+  jpts' <- liftFree <<< inj $ Kleisli (\p -> [(*0.5) <$> p, p]) -< jpts
+  mu <- scalar "mu" -< store
+  
+  returnA -< (mu, jpts, jetas, jpvtrkpt)
 
 
-interpTell :: Tell s ~> (,) s
-interpTell (Tell s) = (s, ())
+hoistFree' :: Free p a b -> (p :-> q) -> Free q a b
+hoistFree' a f = hoistFree f a
 
 
-type Writer s = Comp IO ((,) s)
+runFree' :: (Category q, Traversing q) => Free p a b -> (p :-> q) -> q a b
+runFree' a f = runFree f a
+
+toConst :: Monoid m => p :-> Const m
+toConst _ = Const mempty
+
+ignVars :: Monoid m => Vars :-> Const m
+ignVars = toConst
+
+ignSFs :: Monoid m => SFs :-> Const m
+ignSFs = toConst
 
 
-interpWriter
-  :: Monoid sf
-  => HM String VFP -> (Tell sf :+: BVar String) ~> Writer sf
-interpWriter _ (L1 (Tell sf)) = Comp $ return (sf, ())
-interpWriter branches (R1 b) = Comp <<< fmap (mempty,) $ readVars branches b
+
+liftC2 :: Applicative m => n ~> (Compose m n)
+liftC2 = Compose <<< pure
+
+liftC1 :: (Functor m, Applicative n) => m ~> Compose m n
+liftC1 = Compose <<< fmap pure
 
 
-main :: IO ()
+type f ~> g = forall x. f x -> g x
+
+
+liftK :: (m ~> n) -> Kleisli m :-> Kleisli n
+liftK nat (Kleisli f) = Kleisli $ nat <<< f
+
+
+type KIO = Kleisli IO
+type PO = Compose IO (Compose [] ((,) (Product Float)))
+type Ana = Kleisli PO
+
+handleIO :: KIO :-> Ana
+handleIO = liftK liftC1
+
+handleVars :: Vars :-> Ana
+handleVars = liftK (liftC2 <<< liftC1)
+
+handleSFs :: SFs :-> Ana
+handleSFs = liftK (liftC2 <<< liftC2)
+
+
+
+getBranches :: Const MHM' a b -> MHM'
+getBranches = getConst
+
+
+type MHM = HM.MonoidalHashMap String
+type MHM' = MHM (First (IO (ForeignPtr ())))
+
+main ::IO ()
 main = do
   (fname : tname : _) <- getArgs
 
   f <- tfileOpen fname
 
-  t@(TTree tp) <- ttree f tname
+  t <- ttree f tname
 
-  branches <- marshalling (collapseTell test)
+  let cnv = mapConst (\(s, p) -> HM.singleton s (First p))
+      Const hm =
+        runFree' ana
+        $ extract @(Const MHM')
+          <<< runU (inj <<< ignVars @MHM')
+          <<< runU (inj <<< ignSFs @MHM')
+          <<< runU (inj <<< cnv <<< ptrBS)
+          <<< runU (inj <<< cnv <<< ptrBV)
+          <<< runU (inj <<< cnv <<< ptrBV2)
 
-  binterpret id (either error return) $ connectBranches tp branches
 
-  let prog = unComp $ interpret (interpWriter branches) test
+  hm' <- traverse getFirst (hm::MHM')
+
+  _ <- either error id <$> connectBranches t hm'
+
+  let lookup' h k = maybe (error $ "missing " ++ k) id $ HM.lookup k h
+      hook = lookup' hm'
+  
+      (prog :: Ana () Ret) =
+        runFree' ana
+        $ extract
+          <<< runU (inj <<< handleVars)
+          <<< runU (inj <<< handleSFs)
+          <<< runU (inj <<< handleIO)
+          <<< runU (inj <<< readBS <<< mapL hook)
+          <<< runU (inj <<< readBV <<< mapL hook)
+          <<< runU (inj <<< readBV2 <<< mapL hook)
+
 
   print =<< loadEntry t 0
-
-  print =<< prog
-
-  print =<< loadEntry t 1
-
-  print =<< prog
+  
+  print =<< getCompose (runKleisli prog ())
 
   print =<< loadEntry t 100
+  
+  print =<< getCompose (runKleisli prog ())
 
-  print =<< prog
+
+class Swap m n where
+  swap :: n (m a) -> m (n a)
+
+instance (Monad m, Monad n, Swap m n) => Monad (Compose m n) where
+  Compose mna >>= f =
+    let mnmnb = fmap (getCompose . f) <$> mna
+        mnb = join $ fmap join . swap <$> mnmnb
+    in Compose mnb
+
+instance (Applicative m, Traversable t) => Swap m t where
+  swap = sequenceA

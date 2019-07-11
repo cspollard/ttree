@@ -1,11 +1,17 @@
 module TTree.Internal.Common
-  ( module X
+  ( module X, VP, VFP
   ) where
 
 
-import Data.Functor.Combinator as X
-import Data.Functor.Identity as X
-import Data.Functor.Const as X
-import Control.Arrow as X ((<<<), (>>>))
-import Control.Monad as X ((<=<), (>=>))
+import Control.Arrow as X
+import Control.Category as X
+import Data.Profunctor as X
+import Data.Profunctor.Strong as X
+import Data.Profunctor.Choice as X
+import Data.Profunctor.Traversing as X
 
+import Foreign
+
+-- void pointers
+type VP = Ptr ()
+type VFP = ForeignPtr ()
