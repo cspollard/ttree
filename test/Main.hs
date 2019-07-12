@@ -80,20 +80,6 @@ ana = proc store -> do
 
 
 
-runFree' :: (Category q, Traversing q) => Free p a b -> (p :-> q) -> q a b
-runFree' a f = runFree f a
-
-liftC2 :: Applicative m => n ~> (Compose m n)
-liftC2 = Compose <<< pure
-
-liftC1 :: (Functor m, Applicative n) => m ~> Compose m n
-liftC1 = Compose <<< fmap pure
-
-
-liftK :: (m ~> n) -> Kleisli m :-> Kleisli n
-liftK nat (Kleisli f) = Kleisli $ nat <<< f
-
-
 -- a physics object: IO actions, syst variations, multiplicative SFs
 type PO = Compose IO (Compose [] ((,) (Product Float)))
 
@@ -209,4 +195,19 @@ handleSFs = liftK (liftC2 <<< liftC2)
 
 getBranches :: Const MHM' a b -> MHM'
 getBranches = getConst
+
+
+runFree' :: (Category q, Traversing q) => Free p a b -> (p :-> q) -> q a b
+runFree' a f = runFree f a
+
+liftC2 :: Applicative m => n ~> (Compose m n)
+liftC2 = Compose <<< pure
+
+liftC1 :: (Functor m, Applicative n) => m ~> Compose m n
+liftC1 = Compose <<< fmap pure
+
+
+liftK :: (m ~> n) -> Kleisli m :-> Kleisli n
+liftK nat (Kleisli f) = Kleisli $ nat <<< f
+
 
