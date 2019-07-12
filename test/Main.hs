@@ -43,27 +43,48 @@ type Vars = Kleisli []
 
 type SFs = Kleisli ((,) (Product Float))
 
-sf :: SFs Float ()
-sf = Kleisli $ \w -> (Product w, ())
 
-type Ret = (Float, Vector Float, Vector Float, Vector (Vector Float))
+type ReadScal = L String BS
+type ReadVec = L String BV
+type ReadVec2 = L String BV2
+
+
+injK :: Member rels (Kleisli m) => (a -> m b) -> Analysis rels a b
+injK = liftFree <<< inj <<< Kleisli
+
+
+sf :: Member rels SFs => (a -> Float) -> Analysis rels a ()
+sf f = injK $ \x -> (Product $ f x, ())
+
+
+vars :: Member rels Vars => (a -> [b]) -> Analysis rels a b
+vars f = injK f
+
+
+readMu :: Members rels '[ ReadScal, SFs, Vars ]  => Analysis rels () Float
+readMu = proc store -> do
+  mu <- scalar "mu" -< store
+
+  _ <- sf (\x -> if x < 20 then 1.1 else 0.9) -< mu
+
+  mu' <- vars (\x -> [x, x*0.9, x*1.1]) -< mu
+
+  returnA -< mu'
+
+
 
 ana
-  :: Members arrs '[ L String BS, L String BV, L String BV2, Vars , SFs ]
-  => Analysis arrs () Ret
+  :: Members rels '[ ReadScal, ReadVec, Vars , SFs ]
+  => Analysis rels () (Float, Vector Float)
 ana = proc store -> do
+
   jpts <- vector "jet_pt" -< store
-  jetas <- vector "jet_eta" -< store
-  jpvtrkpt <- vector2 "jet_pv_track_pt" -< store
-  () <- liftFree <<< inj $ sf -< 1.1
-  jpts' <- liftFree <<< inj $ Kleisli (\p -> [(*0.5) <$> p, p]) -< jpts
-  mu <- scalar "mu" -< store
+  jpts' <- vars (\p -> [p, (*0.75) <$> p, (*1.25) <$> p]) -< jpts
+
+  mu <- readMu -< store
   
-  returnA -< (mu, jpts, jetas, jpvtrkpt)
+  returnA -< (mu, jpts')
 
-
-hoistFree' :: Free p a b -> (p :-> q) -> Free q a b
-hoistFree' a f = hoistFree f a
 
 
 runFree' :: (Category q, Traversing q) => Free p a b -> (p :-> q) -> q a b
@@ -142,7 +163,7 @@ main = do
   let lookup' h k = maybe (error $ "missing " ++ k) id $ HM.lookup k h
       hook = lookup' hm'
   
-      (prog :: Ana () Ret) =
+      (prog :: Ana () (Float, Vector Float)) =
         runFree' ana
         $ extract
           <<< runU (inj <<< handleVars)

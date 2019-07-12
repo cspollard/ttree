@@ -1,10 +1,9 @@
 packages:
 - '.'
-- '../profunctor-hep.git/'
-  # - location:
-  #     git: https://github.com/cspollard/profunctor-hep.git
-  #     commit: 4f57229
-  #   extra-dep: true
+- location:
+    git: https://github.com/cspollard/profunctor-hep.git
+    commit: 51bb06da6fca7881e0c8b98db2e2a3531c2d400f
+  extra-dep: true
 
 extra-deps:
 - extensible-0.5.1
