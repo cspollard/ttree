@@ -75,8 +75,11 @@ ana = proc store -> do
 
   mu <- readMu -< store
 
-  -- read jet pts from the store and rquire at least 3 jets
-  jpts <- cut (\v -> if V.length v < 3 then Nothing else Just v) <<< vector "jet_pt" -< store
+  -- read jet pts from the store
+  jpts <- vector "jet_pt" -< store
+  -- and require at least 3 jets
+  _ <- cut (\v -> V.length v >= 3) -< jpts
+
   jpts' <- vars (\p -> [p, (*0.75) <$> p, (*1.25) <$> p]) -< jpts
   
   returnA -< (mu, jpts')
@@ -181,8 +184,8 @@ vars :: Member rels Vars => (a -> [b]) -> Analysis rels a b
 vars f = injK f
 
 
-cut :: Member rels Cuts => (a -> Maybe b) -> Analysis rels a b
-cut f = injK f
+cut :: Member rels Cuts => (a -> Bool) -> Analysis rels a ()
+cut f = injK $ \x -> if f x then Just () else Nothing
 
 toConst :: Monoid m => p :-> Const m
 toConst _ = Const mempty
