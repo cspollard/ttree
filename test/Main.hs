@@ -25,6 +25,7 @@ import TTree.TTree
 import TTree.TFile
 import Control.Arrow
 import Data.Vector (Vector)
+import qualified Data.Vector as V
 import Analysis.Free
 import qualified Data.HashMap.Monoidal as HM
 import Analysis.Const
@@ -42,6 +43,7 @@ import Foreign
 -- define some convenience types
 type Vars = Kleisli [] -- list-based syst variations
 type SFs = Kleisli ((,) (Product Float)) -- multiplicative SFs
+type Cuts = Kleisli Maybe -- possibility of failure
 
 type ReadScal = L String BS -- can read scalar branches
 type ReadVec = L String BV -- can read vector<> branches
@@ -67,21 +69,22 @@ readMu = proc store -> do
 -- it supports reading scalar and vector values from a tree
 -- as well as systematic variations and SFs
 ana
-  :: Members rels '[ ReadScal, ReadVec, Vars , SFs ]
+  :: Members rels '[ ReadScal, ReadVec, Vars, SFs, Cuts ]
   => Analysis rels () (Float, Vector Float)
 ana = proc store -> do
 
-  jpts <- vector "jet_pt" -< store
-  jpts' <- vars (\p -> [p, (*0.75) <$> p, (*1.25) <$> p]) -< jpts
-
   mu <- readMu -< store
+
+  -- read jet pts from the store and rquire at least 3 jets
+  jpts <- cut (\v -> if V.length v < 3 then Nothing else Just v) <<< vector "jet_pt" -< store
+  jpts' <- vars (\p -> [p, (*0.75) <$> p, (*1.25) <$> p]) -< jpts
   
   returnA -< (mu, jpts')
 
 
 
 -- a physics object: IO actions, syst variations, multiplicative SFs
-type PO = Compose IO (Compose [] ((,) (Product Float)))
+type PO = Compose IO (Compose [] (Compose ((,) (Product Float)) Maybe))
 
 -- a physics analysis from a to b: a -> PO b
 type Ana = Kleisli PO
@@ -108,6 +111,7 @@ main = do
         $ extract @(Const MHM')
           <<< runU (inj <<< ignVars @MHM') -- ignore syst variations 
           <<< runU (inj <<< ignSFs @MHM') -- ignore SFs
+          <<< runU (inj <<< ignCuts @MHM') -- ignore Cuts
           <<< runU (inj <<< cnv <<< ptrBS) -- keep scalar branch names
           <<< runU (inj <<< cnv <<< ptrBV) -- keep vector branch names
           <<< runU (inj <<< cnv <<< ptrBV2) -- keep vector2 branch names
@@ -128,6 +132,7 @@ main = do
         runFree' ana
         $ extract
           <<< runU (inj <<< handleVars) -- lift Vars to a physics object
+          <<< runU (inj <<< handleCuts) -- lift Vars to a physics object
           <<< runU (inj <<< handleSFs) -- lift SFs to a physics object
           <<< runU (inj <<< handleIO) -- lift IO to a physics object
           <<< runU (inj <<< readBS <<< mapL hook) -- read scalar branches
@@ -135,9 +140,14 @@ main = do
           <<< runU (inj <<< readBV2 <<< mapL hook) -- read vector2 branches
 
 
-  -- read in entry zero and 100 and print the results of the analysis
+  -- read in a few entries and print the results of the analysis
   _ <- loadEntry t 0
   
+  print =<< getCompose (runKleisli prog ())
+
+
+  _ <- loadEntry t 10
+
   print =<< getCompose (runKleisli prog ())
 
   _ <- loadEntry t 100
@@ -171,6 +181,9 @@ vars :: Member rels Vars => (a -> [b]) -> Analysis rels a b
 vars f = injK f
 
 
+cut :: Member rels Cuts => (a -> Maybe b) -> Analysis rels a b
+cut f = injK f
+
 toConst :: Monoid m => p :-> Const m
 toConst _ = Const mempty
 
@@ -181,6 +194,10 @@ ignSFs :: Monoid m => SFs :-> Const m
 ignSFs = toConst
 
 
+ignCuts :: Monoid m => Cuts :-> Const m
+ignCuts = toConst
+
+
 -- the following lift relations in IO, Vars, SFs to relations in physics objects
 handleIO :: Kleisli IO :-> Ana
 handleIO = liftK liftC1
@@ -189,7 +206,10 @@ handleVars :: Vars :-> Ana
 handleVars = liftK (liftC2 <<< liftC1)
 
 handleSFs :: SFs :-> Ana
-handleSFs = liftK (liftC2 <<< liftC2)
+handleSFs = liftK (liftC2 <<< liftC2 <<< liftC1)
+
+handleCuts :: Cuts :-> Ana
+handleCuts = liftK (liftC2 <<< liftC2 <<< liftC2)
 
 
 
