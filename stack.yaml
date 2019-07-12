@@ -2,7 +2,7 @@ packages:
 - '.'
 - location:
     git: https://github.com/cspollard/profunctor-hep.git
-    commit: 51bb06da6fca7881e0c8b98db2e2a3531c2d400f
+    commit: afcdef60c983f3a08a4f8c67cbba171d64cdc57d
   extra-dep: true
 
 extra-deps:
