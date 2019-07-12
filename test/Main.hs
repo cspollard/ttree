@@ -52,7 +52,8 @@ type ReadVec2 = L String BV2 -- can read vector<vector<>> branches
 type f ~> g = forall x. f x -> g x -- natural transformation
 
 
--- reads in a variable "mu", which incurs a scale factor and some syst variations
+-- reads in a variable "mu" from some event store
+-- this incurs a scale factor and some syst variations
 readMu :: Members rels '[ ReadScal, SFs, Vars ]  => Analysis rels () Float
 readMu = proc store -> do
   mu <- scalar "mu" -< store
@@ -67,7 +68,7 @@ readMu = proc store -> do
 
 -- a toy Analysis
 -- it supports reading scalar and vector values from a tree
--- as well as systematic variations and SFs
+-- as well as systematic variations, SFs, and cuts
 ana
   :: Members rels '[ ReadScal, ReadVec, Vars, SFs, Cuts ]
   => Analysis rels () (Float, Vector Float)
@@ -77,7 +78,8 @@ ana = proc store -> do
 
   -- read jet pts from the store
   jpts <- vector "jet_pt" -< store
-  -- and require at least 3 jets
+
+  -- require at least 3 jets
   _ <- cut (\v -> V.length v >= 3) -< jpts
 
   jpts' <- vars (\p -> [p, (*0.75) <$> p, (*1.25) <$> p]) -< jpts
